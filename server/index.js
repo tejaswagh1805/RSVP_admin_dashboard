@@ -63,6 +63,55 @@ const s3Credentials = process.env.S3_AWS_ACCESS_KEY_ID && process.env.S3_AWS_SEC
   ? { accessKeyId: process.env.S3_AWS_ACCESS_KEY_ID, secretAccessKey: process.env.S3_AWS_SECRET_ACCESS_KEY }
   : undefined;
 const s3 = mediaBucket ? new S3Client({ region: mediaRegion, ...(s3Credentials ? { credentials: s3Credentials } : {}) }) : null;
+
+async function createCreatorPassGoogleForm(event) {
+  const endpoint = String(process.env.GOOGLE_FORM_CREATOR_SCRIPT_URL || "").trim();
+  const secret = String(process.env.GOOGLE_FORM_CREATOR_SECRET || "").trim();
+  if (!endpoint || secret.length < 32) {
+    return { url: "", error: "Google Form auto-creation is not configured. Set GOOGLE_FORM_CREATOR_SCRIPT_URL and GOOGLE_FORM_CREATOR_SECRET on the admin server." };
+  }
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ secret, event: {
+        id: event.id,
+        title: event.title,
+        brand: event.brand || "RSVP DXB",
+        date: event.date || "",
+        time: event.time || "",
+        venue: event.venue || "",
+        area: event.area || "",
+        hashtag: event.hashtag || "",
+        creatorPassNote: event.creatorPassNote || event.creator_pass_note || "",
+        imageUrl: event.imageData || event.image_data || event.imageGallery?.[0] || event.image_gallery?.[0] || "",
+      } }),
+      signal: AbortSignal.timeout(25000),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !/^https:\/\/docs\.google\.com\/forms\//.test(String(payload.responderUrl || ""))) {
+      throw new Error(payload.error || `Google Forms returned ${response.status}.`);
+    }
+    return { url: payload.responderUrl, error: "" };
+  } catch (error) {
+    return { url: "", error: String(error?.message || "Could not create the Google Form.").slice(0, 800) };
+  }
+}
+
+async function ensureCreatorPassGoogleForm(event) {
+  if (!event || event.status !== "published") return { url: event?.creatorPassFormUrl || event?.creator_pass_form_url || "", error: "" };
+  const currentUrl = String(event.creatorPassFormUrl || event.creator_pass_form_url || "");
+  if (currentUrl) return { url: currentUrl, error: "" };
+  const result = await createCreatorPassGoogleForm(event);
+  if (sql) {
+    await sql`UPDATE events SET creator_pass_form_url = ${result.url}, creator_pass_form_error = ${result.error}, updated_at = NOW() WHERE id = ${event.id}`;
+  } else {
+    const demoEvent = demo.events.find((item) => item.id === event.id);
+    if (demoEvent) Object.assign(demoEvent, { creatorPassFormUrl: result.url, creatorPassFormError: result.error });
+  }
+  return result;
+}
+
 const demoSessions = new Map();
 const dashboardTrack = {
   influencer: "Creators",
@@ -485,7 +534,7 @@ const selectFor = {
   members:
     'SELECT id, member_number AS "memberNumber", name, email, track, source_track AS "sourceTrack", rank, points, events, city, profile_url AS "profileUrl", handle, platform, followers, mobile, outlet, member_role AS role, all_profiles AS "allProfiles", status, joined::text AS joined FROM members ORDER BY name',
   events:
-    'SELECT id, title, brand, venue, date::text AS date, end_date::text AS \"endDate\", time, end_time AS \"endTime\", gates_open_time AS \"gatesOpenTime\", area, category, tracks, capacity, confirmed, ticket_price AS \"ticketPrice\", ticket_currency AS \"ticketCurrency\", ticket_url AS \"ticketUrl\", reservation_phone AS \"reservationPhone\", creator_pass_note AS \"creatorPassNote\", age_restriction AS \"ageRestriction\", hashtag, application_deadline::text AS \"applicationDeadline\", action_label AS \"actionLabel\", dress_code AS \"dressCode\", about, included, who_is_invited AS \"whoIsInvited\", host_note AS \"hostNote\", COALESCE(image_gallery[1], image_data) AS \"imageData\", image_gallery AS \"imageGallery\", video_url AS \"videoUrl\", track_capacities AS \"trackCapacities\", influencer_deliverables AS \"influencerDeliverables\", map_url AS \"mapUrl\", (SELECT COUNT(*)::int FROM event_rsvp_requests r WHERE r.event_id = events.id AND r.status = \'pending\') AS \"pendingRsvpCount\", status FROM events ORDER BY date',
+    'SELECT id, title, brand, venue, date::text AS date, end_date::text AS \"endDate\", time, end_time AS \"endTime\", gates_open_time AS \"gatesOpenTime\", area, category, tracks, capacity, confirmed, ticket_price AS \"ticketPrice\", ticket_currency AS \"ticketCurrency\", ticket_url AS \"ticketUrl\", reservation_phone AS \"reservationPhone\", creator_pass_note AS \"creatorPassNote\", creator_pass_form_url AS \"creatorPassFormUrl\", creator_pass_form_error AS \"creatorPassFormError\", age_restriction AS \"ageRestriction\", hashtag, application_deadline::text AS \"applicationDeadline\", action_label AS \"actionLabel\", dress_code AS \"dressCode\", about, included, who_is_invited AS \"whoIsInvited\", host_note AS \"hostNote\", COALESCE(image_gallery[1], image_data) AS \"imageData\", image_gallery AS \"imageGallery\", video_url AS \"videoUrl\", track_capacities AS \"trackCapacities\", influencer_deliverables AS \"influencerDeliverables\", map_url AS \"mapUrl\", (SELECT COUNT(*)::int FROM event_rsvp_requests r WHERE r.event_id = events.id AND r.status = \'pending\') AS \"pendingRsvpCount\", status FROM events ORDER BY date',
   wall_posts:
     'SELECT id, brand, type, body, posted, boosted, status, event_id AS "eventId" FROM wall_posts ORDER BY created_at DESC',
   site_media:
@@ -1016,16 +1065,19 @@ app.post("/api/integrations/google-forms/creator-pass", async (req, res, next) =
     const name = text(req.body.name, 120);
     const email = text(req.body.email, 254).toLowerCase();
     const phone = text(req.body.phone, 24).replace(/[^+\d]/g, "");
+    const instagramHandle = text(req.body.instagramHandle, 100);
+    const instagramFollowers = text(req.body.instagramFollowers, 40);
+    const creatorAddress = text(req.body.creatorAddress, 500);
     if (name.length < 2 || !/^\+?\d{8,15}$/.test(phone))
       return res.status(400).json({ error: "A name and valid international phone number are required." });
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       return res.status(400).json({ error: "Enter a valid email address." });
-    const events = await sql`SELECT id FROM events WHERE id = ${eventId} AND status = 'published' AND (date IS NULL OR date >= (NOW() AT TIME ZONE 'Asia/Dubai')::date) AND creator_pass_note <> '' AND (application_deadline IS NULL OR application_deadline >= (NOW() AT TIME ZONE 'Asia/Dubai')::date) LIMIT 1`;
+    const events = await sql`SELECT id FROM events WHERE id = ${eventId} AND status = 'published' AND (date IS NULL OR date >= (NOW() AT TIME ZONE 'Asia/Dubai')::date) AND (application_deadline IS NULL OR application_deadline >= (NOW() AT TIME ZONE 'Asia/Dubai')::date) LIMIT 1`;
     if (!events[0]) return res.status(400).json({ error: "This event is not accepting creator pass requests." });
     const recent = await sql`SELECT id FROM event_ticket_inquiries WHERE event_id = ${eventId} AND phone = ${phone} AND request_type = 'creator_pass' AND status IN ('pending', 'accepted', 'waitlisted') LIMIT 1`;
     if (recent[0]) return res.json({ received: true, duplicate: true });
     const id = `google-form-${randomBytes(16).toString("hex")}`;
-    await sql`INSERT INTO event_ticket_inquiries (id, event_id, full_name, email, phone, request_type) VALUES (${id}, ${eventId}, ${name}, ${email}, ${phone}, 'creator_pass')`;
+    await sql`INSERT INTO event_ticket_inquiries (id, event_id, full_name, email, phone, request_type, instagram_handle, instagram_followers, creator_address) VALUES (${id}, ${eventId}, ${name}, ${email}, ${phone}, 'creator_pass', ${instagramHandle}, ${instagramFollowers}, ${creatorAddress})`;
     res.status(201).json({ received: true });
   } catch (error) { next(error); }
 });
@@ -2505,10 +2557,27 @@ app.post("/api/events", async (req, res, next) => {
     if (!sql) demo.events.unshift(event);
     else
       await sql`INSERT INTO events (id, title, brand, venue, date, end_date, time, end_time, gates_open_time, area, capacity, confirmed, ticket_price, ticket_currency, ticket_url, reservation_phone, creator_pass_note, age_restriction, hashtag, application_deadline, action_label, category, tracks, dress_code, about, included, who_is_invited, host_note, image_data, image_gallery, video_url, track_capacities, influencer_deliverables, map_url, status) VALUES (${id}, ${title}, ${brand}, ${venue}, ${date || null}, ${endDate || null}, ${time}, ${endTime}, ${gatesOpenTime}, ${area}, ${capacity}, 0, ${ticketPrice}, ${ticketCurrency}, ${ticketUrl}, ${reservationPhone}, ${creatorPassNote}, ${ageRestriction}, ${hashtag}, ${applicationDeadline || null}, ${actionLabel}, ${category}, ${tracks}, ${dressCode}, ${about}, ${included}, ${whoIsInvited}, ${hostNote}, ${imageData}, ${imageDataList}, ${videoUrl}, ${JSON.stringify(trackCapacities)}::jsonb, ${influencerDeliverables}, ${mapUrl}, ${status})`;
+    if (status === "published") {
+      const form = await ensureCreatorPassGoogleForm(event);
+      Object.assign(event, { creatorPassFormUrl: form.url, creatorPassFormError: form.error });
+    }
     res.status(201).json(event);
   } catch (error) {
     next(error);
   }
+});
+app.post("/api/events/:id/creator-pass-form", async (req, res, next) => {
+  try {
+    if (!sql) return res.status(503).json({ error: "Google Forms require the connected database." });
+    const eventId = text(req.params.id, 180);
+    const rows = await sql`SELECT id, title, brand, venue, area, date::text AS date, time, hashtag, creator_pass_note, creator_pass_form_url, image_data, image_gallery, status FROM events WHERE id = ${eventId} LIMIT 1`;
+    const event = rows[0];
+    if (!event) return res.status(404).json({ error: "Event not found." });
+    if (event.status !== "published") return res.status(400).json({ error: "Publish the event before creating its creator pass form." });
+    const form = await ensureCreatorPassGoogleForm(event);
+    if (form.error) return res.status(502).json({ error: form.error });
+    res.json({ creatorPassFormUrl: form.url, creatorPassFormError: "" });
+  } catch (error) { next(error); }
 });
 app.patch("/api/events/:id", async (req, res, next) => {
   try {
@@ -2572,6 +2641,9 @@ app.patch("/api/events/:id", async (req, res, next) => {
       }
       const rows = await sql`UPDATE events SET title = ${title}, brand = ${brand}, venue = ${venue}, area = ${area}, date = ${date || null}, end_date = ${endDate || null}, time = ${time}, end_time = ${endTime}, gates_open_time = ${gatesOpenTime}, ticket_url = ${ticketUrl}, reservation_phone = ${reservationPhone}, creator_pass_note = ${creatorPassNote}, age_restriction = ${ageRestriction}, hashtag = ${hashtag}, application_deadline = ${applicationDeadline || null}, action_label = ${actionLabel}, capacity = ${capacity}, ticket_price = ${ticketPrice}, ticket_currency = ${ticketCurrency}, category = ${category}, tracks = ${tracks}, track_capacities = ${JSON.stringify(trackCapacities)}::jsonb, influencer_deliverables = ${influencerDeliverables}, map_url = ${mapUrl}, dress_code = ${dressCode}, about = ${about}, included = ${included}, who_is_invited = ${whoIsInvited}, host_note = ${hostNote}, video_url = ${videoUrl}, image_data = ${imageData}, image_gallery = ${imageDataList}, status = ${status}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
       if (!rows[0]) return res.status(404).json({ error: "Event not found." });
+      if (status === "published" && !rows[0].creator_pass_form_url) {
+        await ensureCreatorPassGoogleForm({ ...rows[0], id, title, brand, venue, area, date, hashtag, creatorPassNote, imageData, imageDataList, status });
+      }
       return res.json(rows[0]);
     }
     const { status } = req.body;
@@ -2596,7 +2668,7 @@ app.patch("/api/events/:id", async (req, res, next) => {
       return res.status(400).json({ error: "Invalid event status." });
     if (status === "published") {
       const rows = sql
-        ? await sql`SELECT title, image_data, image_gallery FROM events WHERE id = ${req.params.id} LIMIT 1`
+        ? await sql`SELECT id, title, brand, venue, area, date::text AS date, time, hashtag, creator_pass_note, creator_pass_form_url, image_data, image_gallery, status FROM events WHERE id = ${req.params.id} LIMIT 1`
         : [demo.events.find((row) => row.id === req.params.id)];
       const event = rows[0];
       if (!event) return res.status(404).json({ error: "Event not found." });
@@ -2615,7 +2687,13 @@ app.patch("/api/events/:id", async (req, res, next) => {
     const rows =
       await sql`UPDATE events SET status = ${status}, updated_at = NOW() WHERE id = ${req.params.id} RETURNING *`;
     if (!rows[0]) return res.status(404).json({ error: "Event not found." });
-    res.json(rows[0]);
+    const result = rows[0];
+    if (status === "published" && !result.creator_pass_form_url) {
+      const form = await ensureCreatorPassGoogleForm({ ...result, id: result.id, imageData: result.image_data, imageGallery: result.image_gallery, creatorPassNote: result.creator_pass_note, creatorPassFormUrl: result.creator_pass_form_url });
+      result.creator_pass_form_url = form.url;
+      result.creator_pass_form_error = form.error;
+    }
+    res.json(result);
   } catch (error) {
     next(error);
   }

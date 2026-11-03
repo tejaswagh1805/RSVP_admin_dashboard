@@ -1,0 +1,2 @@
+ALTER TABLE events ADD COLUMN IF NOT EXISTS creator_pass_form_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE events ADD COLUMN IF NOT EXISTS creator_pass_form_error TEXT NOT NULL DEFAULT '';

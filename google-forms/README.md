@@ -1,12 +1,25 @@
-# Creator pass requests
+# Creator pass Google Forms
 
-Creator pass requests now use the RSVP DXB customer site directly. The request button opens the selected event page and its event-specific form; no Google Form URL or Apps Script sync is required for new requests.
+When an event is published, the admin server asks Apps Script to create a Google Form in the automation account, add the creator-pass questions and event details, include the event cover image, and save the responder URL on that event. Both the event card and event detail page open the event's form. Submissions are synced back into the event's existing RSVP review queue. This creates each form directly and does not require editor access to another Google Form.
 
-The form collects name, email, WhatsApp number, Instagram handle, Instagram follower count, and address. Requests are stored in `event_ticket_inquiries` with the selected `event_id` and `request_type = 'creator_pass'`. Admins review them from the event's RSVP review panel and can accept, waitlist, or decline.
+## One-time Google setup
 
-The former Google Form integration script is retained for historical Google responses and legacy use. New website submissions do not pass through Google Forms.
+1. Sign in as the Google account that should own future forms (for example, `connect@rsvpdxb.com`), open [Apps Script](https://script.google.com), create a standalone project, and paste `create-event-creator-pass-form.gs` into its editor. No existing template form or template ID is required.
+2. In **Project Settings → Script Properties**, add:
+   - `CREATOR_FORM_SECRET` = a long random secret (32+ characters). This must match `GOOGLE_FORM_CREATOR_SECRET` on the admin server.
+   - `RSVP_CREATOR_PASS_WEBHOOK_URL` = the public admin API URL ending in `/api/integrations/google-forms/creator-pass`.
+   - `RSVP_CREATOR_PASS_WEBHOOK_SECRET` = the existing `GOOGLE_FORM_WEBHOOK_SECRET` configured on the admin server.
+3. Select `authorizeCreatorPassAutomation` in the Apps Script editor, click **Run**, and approve the Google Forms, Drive, trigger, and external request permissions. This authorizes future form creation and response syncs under this Google account. The authorization check creates and trashes a temporary test form.
+4. Choose **Deploy → New deployment → Web app**. Set **Execute as** to the deploying account and access to **Anyone** so the server can call it. The shared secret protects the endpoint. Copy the deployed `/exec` URL.
+5. Set these variables on the admin server (in production, use the deployment's secret store): `GOOGLE_FORM_CREATOR_SCRIPT_URL` to the `/exec` URL and `GOOGLE_FORM_CREATOR_SECRET` to the same value as `CREATOR_FORM_SECRET`. Keep `GOOGLE_FORM_WEBHOOK_SECRET` configured too. Never commit real secrets.
 
-Deploy both the customer site and admin dashboard after applying migration `0026_creator_pass_applicant_details.sql` (the admin migration runner also includes this schema update). Then submit a creator pass request for each event and confirm it appears in that event's admin review panel.
+## Deploy the app changes
+
+1. Run `npm run db:migrate` in both `RSVP_admin_dashboard` and `RSVP-DXB-customer` against the shared database. The migrations add the per-event form URL (and admin creation error) columns.
+2. Deploy/restart the admin server with the Apps Script variables set, then deploy the customer site. Publishing a new event creates its form automatically. Existing published events show **Create creator pass form** in the admin event list until their form is created.
+3. Submit one test application. It should appear under that event's admin RSVP review panel, and the original response remains visible in Google Forms.
+
+If Google form creation fails, the event stays published, the dashboard displays the error, and its **Create creator pass form** button can retry safely without making a duplicate form.
 
 # New account applications and event enquiries
 

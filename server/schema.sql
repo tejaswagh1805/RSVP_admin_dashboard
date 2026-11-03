@@ -113,6 +113,8 @@ CREATE TABLE IF NOT EXISTS events (
   ticket_url TEXT NOT NULL DEFAULT '',
   reservation_phone TEXT NOT NULL DEFAULT '',
   creator_pass_note TEXT NOT NULL DEFAULT '',
+  creator_pass_form_url TEXT NOT NULL DEFAULT '',
+  creator_pass_form_error TEXT NOT NULL DEFAULT '',
   age_restriction TEXT NOT NULL DEFAULT '',
   hashtag TEXT NOT NULL DEFAULT '',
   application_deadline DATE,
@@ -132,6 +134,8 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS gates_open_time TEXT NOT NULL DEFAUL
 ALTER TABLE events ADD COLUMN IF NOT EXISTS ticket_url TEXT NOT NULL DEFAULT '';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS reservation_phone TEXT NOT NULL DEFAULT '';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS creator_pass_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE events ADD COLUMN IF NOT EXISTS creator_pass_form_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE events ADD COLUMN IF NOT EXISTS creator_pass_form_error TEXT NOT NULL DEFAULT '';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS age_restriction TEXT NOT NULL DEFAULT '';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS hashtag TEXT NOT NULL DEFAULT '';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS application_deadline DATE;
