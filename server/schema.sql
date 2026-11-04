@@ -201,6 +201,7 @@ CREATE TABLE IF NOT EXISTS people_profiles (
   bio TEXT NOT NULL DEFAULT '',
   image_url TEXT NOT NULL,
   object_key TEXT NOT NULL,
+  gallery_images TEXT[] NOT NULL DEFAULT '{}',
   instagram_url TEXT NOT NULL DEFAULT '',
   tiktok_url TEXT NOT NULL DEFAULT '',
   youtube_url TEXT NOT NULL DEFAULT '',

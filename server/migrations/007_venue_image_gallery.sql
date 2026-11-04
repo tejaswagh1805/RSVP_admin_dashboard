@@ -1,0 +1,1 @@
+ALTER TABLE venues ADD COLUMN IF NOT EXISTS gallery_images TEXT[] NOT NULL DEFAULT '{}';

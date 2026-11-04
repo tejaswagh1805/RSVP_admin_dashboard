@@ -62,7 +62,10 @@ const mediaBaseUrl = String(process.env.S3_MEDIA_BASE_URL || (mediaBucket ? `htt
 const s3Credentials = process.env.S3_AWS_ACCESS_KEY_ID && process.env.S3_AWS_SECRET_ACCESS_KEY
   ? { accessKeyId: process.env.S3_AWS_ACCESS_KEY_ID, secretAccessKey: process.env.S3_AWS_SECRET_ACCESS_KEY }
   : undefined;
-const s3 = mediaBucket ? new S3Client({ region: mediaRegion, ...(s3Credentials ? { credentials: s3Credentials } : {}) }) : null;
+// Presigned PutObject URLs are generated without the browser file body. The
+// SDK's default CRC32 middleware otherwise signs the checksum of an empty
+// body into the URL, which does not match the image uploaded by the browser.
+const s3 = mediaBucket ? new S3Client({ region: mediaRegion, requestChecksumCalculation: "WHEN_REQUIRED", ...(s3Credentials ? { credentials: s3Credentials } : {}) }) : null;
 
 async function createCreatorPassGoogleForm(event) {
   const endpoint = String(process.env.GOOGLE_FORM_CREATOR_SCRIPT_URL || "").trim();
@@ -542,7 +545,7 @@ const selectFor = {
   people_profiles:
     'SELECT id, category, name, role, subtitle, bio, image_url AS "imageUrl", object_key AS "objectKey", instagram_url AS "instagramUrl", tiktok_url AS "tiktokUrl", youtube_url AS "youtubeUrl", x_url AS "xUrl", display_order AS "displayOrder", active, created_at AS "createdAt" FROM people_profiles ORDER BY category, display_order, created_at DESC',
   venues:
-    `SELECT id, slug, category, name, tagline, description, location, highlights, offer, featured_date::text AS "featuredDate", image_url AS "imageUrl", object_key AS "objectKey", website_url AS "websiteUrl", more_info_url AS "moreInfoUrl", display_order AS "displayOrder", content_reviewed AS "contentReviewed", featured, active, created_at AS "createdAt" FROM venues ORDER BY CASE category WHEN 'Our partners' THEN 1 WHEN 'Desi luxe' THEN 2 WHEN 'Dinner to party' THEN 3 WHEN 'Bars & night culture' THEN 4 WHEN 'Coffee' THEN 5 ELSE 6 END, display_order, name`,
+    `SELECT id, slug, category, name, tagline, description, location, highlights, offer, featured_date::text AS "featuredDate", image_url AS "imageUrl", object_key AS "objectKey", gallery_images AS "galleryImages", website_url AS "websiteUrl", more_info_url AS "moreInfoUrl", display_order AS "displayOrder", content_reviewed AS "contentReviewed", featured, active, created_at AS "createdAt" FROM venues ORDER BY CASE category WHEN 'Our partners' THEN 1 WHEN 'Desi luxe' THEN 2 WHEN 'Dinner to party' THEN 3 WHEN 'Bars & night culture' THEN 4 WHEN 'Coffee' THEN 5 ELSE 6 END, display_order, name`,
   clients:
     "SELECT id, name, package, credits, events, status FROM clients ORDER BY name",
   guests:
@@ -1396,7 +1399,7 @@ app.get("/api/mobile/venues", async (_req, res, next) => {
     if (!sql) return res.status(503).json({ error: "Venue picks require the shared database." });
     const rows = await sql`
       SELECT id, slug, category, name, tagline, description, location, highlights, offer,
-        featured_date::text AS "featuredDate", image_url AS "imageUrl",
+        featured_date::text AS "featuredDate", image_url AS "imageUrl", gallery_images AS "galleryImages",
         website_url AS "websiteUrl", more_info_url AS "moreInfoUrl",
         display_order AS "displayOrder", featured, active
       FROM venues
@@ -1595,10 +1598,11 @@ app.post("/api/media/upload-url", async (req, res, next) => {
     const size = Number(req.body.size);
     const siteGalleryVideo = req.body.purpose === "site-gallery" && contentType.startsWith("video/");
     const siteGalleryCaptions = req.body.purpose === "site-gallery" && contentType === "text/vtt";
+    const venueImage = req.body.purpose === "venue-image" && contentType.startsWith("image/");
     const extensions = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "text/vtt": "vtt" };
     if (!extensions[contentType] || (contentType === "text/vtt" && !siteGalleryCaptions)) return res.status(400).json({ error: "Use a JPG, PNG, WebP image or MP4, WebM, MOV video. Gallery captions can be uploaded as WebVTT." });
-    const maxBytes = siteGalleryCaptions ? 1024 * 1024 : contentType.startsWith("video/") ? (siteGalleryVideo ? 500 : 100) * 1024 * 1024 : 12 * 1024 * 1024;
-    if (!Number.isInteger(size) || size <= 0 || size > maxBytes) return res.status(400).json({ error: `File must be smaller than ${contentType.startsWith("video/") ? `${siteGalleryVideo ? "500" : "100"} MB` : "12 MB"}.` });
+    const maxBytes = siteGalleryCaptions ? 1024 * 1024 : contentType.startsWith("video/") ? (siteGalleryVideo ? 500 : 100) * 1024 * 1024 : (venueImage ? 50 : 12) * 1024 * 1024;
+    if (!Number.isInteger(size) || size <= 0 || size > maxBytes) return res.status(400).json({ error: `File must be smaller than ${contentType.startsWith("video/") ? `${siteGalleryVideo ? "500" : "100"} MB` : `${venueImage ? "50" : "12"} MB`}.` });
     const safeName = filename.normalize("NFKD").replace(/[^a-zA-Z0-9._-]/g, "-").slice(-100) || `upload.${extensions[contentType]}`;
     // S3 has a flat keyspace; omit date prefixes so uploads appear directly in media/.
     const key = `media/${crypto.randomUUID()}-${safeName}`;
@@ -1782,6 +1786,7 @@ function venuePayload(body = {}) {
   const featuredDate = String(body.featuredDate || "").trim();
   const imageUrl = String(body.imageUrl || "");
   const objectKey = String(body.objectKey || "");
+  const galleryImages = Array.isArray(body.galleryImages) ? body.galleryImages.map((value) => String(value || "").trim()).filter(Boolean) : [];
   const websiteUrl = text(body.websiteUrl, 500);
   const moreInfoUrl = text(body.moreInfoUrl, 500);
   const displayOrder = Math.max(0, Math.min(9999, Number(body.displayOrder) || 0));
@@ -1789,9 +1794,10 @@ function venuePayload(body = {}) {
     return { error: "Add a category, name, location, description and a valid uploaded venue image." };
   }
   if (featuredDate && !/^\d{4}-\d{2}-\d{2}$/.test(featuredDate)) return { error: "Featured date must be a valid date." };
+  if (galleryImages.length > 12 || galleryImages.some((url) => !mediaBaseUrl || !url.startsWith(`${mediaBaseUrl}/media/`))) return { error: "Choose up to 12 gallery images uploaded to the configured media storage." };
   if (![websiteUrl, moreInfoUrl].every(validWebUrl)) return { error: "Website and More info links must start with http:// or https://." };
   const contentReviewed = Boolean(body.contentReviewed);
-  return { value: { category, name, slug, tagline, description, location, highlights, offer, featuredDate: featuredDate || null, imageUrl, objectKey, websiteUrl, moreInfoUrl, displayOrder, contentReviewed, featured: Boolean(body.featured) && contentReviewed } };
+  return { value: { category, name, slug, tagline, description, location, highlights, offer, featuredDate: featuredDate || null, imageUrl, objectKey, galleryImages, websiteUrl, moreInfoUrl, displayOrder, contentReviewed, featured: Boolean(body.featured) && contentReviewed } };
 }
 app.post("/api/venues", async (req, res, next) => {
   try {
@@ -1801,7 +1807,7 @@ app.post("/api/venues", async (req, res, next) => {
     const item = { id, ...parsed.value, active: parsed.value.contentReviewed };
     if (sql) {
       const v = parsed.value;
-      const rows = await sql`INSERT INTO venues (id, slug, category, name, tagline, description, location, highlights, offer, featured_date, image_url, object_key, website_url, more_info_url, display_order, content_reviewed, featured, active) VALUES (${id}, ${v.slug}, ${v.category}, ${v.name}, ${v.tagline}, ${v.description}, ${v.location}, ${v.highlights}, ${v.offer}, ${v.featuredDate}, ${v.imageUrl}, ${v.objectKey}, ${v.websiteUrl}, ${v.moreInfoUrl}, ${v.displayOrder}, ${v.contentReviewed}, ${v.featured}, ${item.active}) RETURNING id, slug, category, name, tagline, description, location, highlights, offer, featured_date::text AS "featuredDate", image_url AS "imageUrl", object_key AS "objectKey", website_url AS "websiteUrl", more_info_url AS "moreInfoUrl", display_order AS "displayOrder", content_reviewed AS "contentReviewed", featured, active`;
+      const rows = await sql`INSERT INTO venues (id, slug, category, name, tagline, description, location, highlights, offer, featured_date, image_url, object_key, gallery_images, website_url, more_info_url, display_order, content_reviewed, featured, active) VALUES (${id}, ${v.slug}, ${v.category}, ${v.name}, ${v.tagline}, ${v.description}, ${v.location}, ${v.highlights}, ${v.offer}, ${v.featuredDate}, ${v.imageUrl}, ${v.objectKey}, ${v.galleryImages}, ${v.websiteUrl}, ${v.moreInfoUrl}, ${v.displayOrder}, ${v.contentReviewed}, ${v.featured}, ${item.active}) RETURNING id, slug, category, name, tagline, description, location, highlights, offer, featured_date::text AS "featuredDate", image_url AS "imageUrl", object_key AS "objectKey", gallery_images AS "galleryImages", website_url AS "websiteUrl", more_info_url AS "moreInfoUrl", display_order AS "displayOrder", content_reviewed AS "contentReviewed", featured, active`;
       return res.status(201).json(rows[0]);
     }
     demo.venues.unshift(item);
@@ -1838,7 +1844,7 @@ app.patch("/api/venues/:id", async (req, res, next) => {
     if (parsed.error) return res.status(400).json({ error: parsed.error });
     const v = parsed.value;
     if (sql) {
-      const rows = await sql`UPDATE venues SET slug = ${v.slug}, category = ${v.category}, name = ${v.name}, tagline = ${v.tagline}, description = ${v.description}, location = ${v.location}, highlights = ${v.highlights}, offer = ${v.offer}, featured_date = ${v.featuredDate}, image_url = ${v.imageUrl}, object_key = ${v.objectKey}, website_url = ${v.websiteUrl}, more_info_url = ${v.moreInfoUrl}, display_order = ${v.displayOrder}, content_reviewed = ${v.contentReviewed}, active = CASE WHEN ${v.contentReviewed} THEN active ELSE FALSE END, featured = CASE WHEN ${v.contentReviewed} THEN ${v.featured} ELSE FALSE END, updated_at = NOW() WHERE id = ${req.params.id} RETURNING id, slug, category, name, tagline, description, location, highlights, offer, featured_date::text AS "featuredDate", image_url AS "imageUrl", object_key AS "objectKey", website_url AS "websiteUrl", more_info_url AS "moreInfoUrl", display_order AS "displayOrder", content_reviewed AS "contentReviewed", featured, active`;
+      const rows = await sql`UPDATE venues SET slug = ${v.slug}, category = ${v.category}, name = ${v.name}, tagline = ${v.tagline}, description = ${v.description}, location = ${v.location}, highlights = ${v.highlights}, offer = ${v.offer}, featured_date = ${v.featuredDate}, image_url = ${v.imageUrl}, object_key = ${v.objectKey}, gallery_images = ${v.galleryImages}, website_url = ${v.websiteUrl}, more_info_url = ${v.moreInfoUrl}, display_order = ${v.displayOrder}, content_reviewed = ${v.contentReviewed}, active = CASE WHEN ${v.contentReviewed} THEN active ELSE FALSE END, featured = CASE WHEN ${v.contentReviewed} THEN ${v.featured} ELSE FALSE END, updated_at = NOW() WHERE id = ${req.params.id} RETURNING id, slug, category, name, tagline, description, location, highlights, offer, featured_date::text AS "featuredDate", image_url AS "imageUrl", object_key AS "objectKey", gallery_images AS "galleryImages", website_url AS "websiteUrl", more_info_url AS "moreInfoUrl", display_order AS "displayOrder", content_reviewed AS "contentReviewed", featured, active`;
       if (!rows[0]) return res.status(404).json({ error: "Venue not found." });
       return res.json(rows[0]);
     }

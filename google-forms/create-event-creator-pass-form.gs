@@ -18,6 +18,7 @@ function doPost(e) {
       const existingId = properties.getProperty("FORM_FOR_EVENT_" + event.id);
       if (existingId) {
         const existing = FormApp.openById(existingId);
+        ensureAnyoneCanRespond_(existing);
         ensureSubmitTrigger_(existing);
         return output_({ formId: existingId, responderUrl: existing.getPublishedUrl() });
       }
@@ -25,6 +26,7 @@ function doPost(e) {
       const title = "Creator Pass Request — " + String(event.title).slice(0, 150);
       const form = FormApp.create(title);
       form.setTitle(title);
+      form.setPublished(true);
       form.setAcceptingResponses(true);
       const eventDetails = [
         event.brand || "RSVP DXB",
@@ -39,11 +41,28 @@ function doPost(e) {
         .setRequired(true);
 
       if (event.imageUrl) {
-        const image = UrlFetchApp.fetch(event.imageUrl, { muteHttpExceptions: true });
-        if (image.getResponseCode() >= 200 && image.getResponseCode() < 300) {
-          form.addImageItem()
-            .setTitle("Event Details")
-            .setImage(image.getBlob().setName("event-cover"));
+        // The cover is decorative. A media CDN timeout, unsupported image
+        // encoding, or Forms image-processing error must not prevent creating
+        // the event's application form.
+        let imageItem = null;
+        try {
+          const image = UrlFetchApp.fetch(event.imageUrl, { muteHttpExceptions: true });
+          const responseCode = image.getResponseCode();
+          if (responseCode >= 200 && responseCode < 300) {
+            imageItem = form.addImageItem().setTitle("Event Details");
+            imageItem.setImage(image.getBlob().setName("event-cover"));
+          } else {
+            console.warn("Skipping creator-pass cover image; image URL returned HTTP " + responseCode + ".");
+          }
+        } catch (imageError) {
+          if (imageItem) {
+            try {
+              form.deleteItem(imageItem);
+            } catch (cleanupError) {
+              console.warn("Could not remove the incomplete creator-pass image item.", cleanupError);
+            }
+          }
+          console.warn("Skipping creator-pass cover image; form creation will continue. " + String(imageError && imageError.message || imageError));
         }
       }
 
@@ -56,6 +75,7 @@ function doPost(e) {
       const formId = form.getId();
       properties.setProperty("FORM_FOR_EVENT_" + event.id, formId);
       properties.setProperty("EVENT_FOR_FORM_" + formId, String(event.id));
+      ensureAnyoneCanRespond_(form);
       ensureSubmitTrigger_(form);
       return output_({ formId: formId, responderUrl: form.getPublishedUrl() });
     } finally {
@@ -64,6 +84,74 @@ function doPost(e) {
   } catch (error) {
     return output_({ error: String(error && error.message || "Unable to create the event form.") }, 500);
   }
+}
+
+/**
+ * Forms access has separate permissions for editors and responders. Add the
+ * public responder permission so guests can open and submit the published URL.
+ * Requires the Advanced Drive service (Drive API v3) to be enabled in Apps Script.
+ */
+function ensureAnyoneCanRespond_(form) {
+  if (!form.supportsAdvancedResponderPermissions()) {
+    throw new Error("This Google Form does not support published responder permissions.");
+  }
+  if (!form.isPublished()) form.setPublished(true);
+  form.setAcceptingResponses(true);
+
+  if (typeof Drive.Permissions.create !== "function") {
+    throw new Error("Drive API v3 is required for public Google Forms responder access. Remove the Drive v2 service and add Drive API v3 in Apps Script Services.");
+  }
+
+  const formId = form.getId();
+  const listOptions = {
+    includePermissionsForView: "published",
+    fields: "permissions(id,type,role,view)",
+  };
+  const listPublishedPermissions = function () {
+    const result = Drive.Permissions.list(formId, listOptions) || {};
+    return result.permissions || [];
+  };
+  let permissions = listPublishedPermissions();
+  const alreadyPublic = permissions.some(function (permission) {
+    return permission.type === "anyone" && permission.role === "reader" && permission.view === "published";
+  });
+  if (!alreadyPublic) {
+    const publicResponderPermission = { type: "anyone", view: "published", role: "reader" };
+    Drive.Permissions.create(publicResponderPermission, formId);
+    permissions = listPublishedPermissions();
+  }
+  const accessGranted = permissions.some(function (permission) {
+    return permission.type === "anyone" && permission.role === "reader" && permission.view === "published";
+  });
+  if (!accessGranted) {
+    throw new Error("Google Drive did not confirm public responder access. Check the Google account or Workspace sharing policy.");
+  }
+}
+
+/**
+ * Run once after enabling the Drive API to repair responder access on forms
+ * created before public responder access was added.
+ */
+function repairExistingCreatorPassFormAccess() {
+  const properties = PropertiesService.getScriptProperties().getProperties();
+  const formIds = Object.keys(properties)
+    .filter(function (key) { return key.indexOf("EVENT_FOR_FORM_") === 0; })
+    .map(function (key) { return key.substring("EVENT_FOR_FORM_".length); });
+  const failures = [];
+  formIds.forEach(function (formId) {
+    try {
+      const form = FormApp.openById(formId);
+      ensureAnyoneCanRespond_(form);
+      Logger.log("Public responder access is enabled: " + form.getTitle() + " (" + formId + ")");
+    } catch (error) {
+      failures.push(formId + ": " + String(error && error.message || error));
+      console.error("Could not enable public responder access for form " + formId + ": " + String(error && error.message || error));
+    }
+  });
+  if (failures.length) {
+    throw new Error("Responder access repair failed for " + failures.length + " of " + formIds.length + " forms. See the execution log for form IDs and details.");
+  }
+  Logger.log("Public responder access verified for " + formIds.length + " existing creator pass form(s).");
 }
 
 function ensureSubmitTrigger_(form) {
@@ -77,6 +165,37 @@ function onCreatorPassSubmit(e) {
   const form = e && e.source;
   const response = e && e.response;
   if (!form || !response) throw new Error("Missing Google Form submission data.");
+  submitCreatorPassResponse_(form, response);
+}
+
+/**
+ * Recovery tool: run manually to resend recorded responses if an installable
+ * submit trigger failed. The admin endpoint ignores duplicate phone requests.
+ */
+function syncAllCreatorPassResponses() {
+  const properties = PropertiesService.getScriptProperties().getProperties();
+  const formIds = Object.keys(properties)
+    .filter(function (key) { return key.indexOf("EVENT_FOR_FORM_") === 0; })
+    .map(function (key) { return key.substring("EVENT_FOR_FORM_".length); });
+  let sent = 0;
+  let failed = 0;
+  formIds.forEach(function (formId) {
+    const form = FormApp.openById(formId);
+    ensureSubmitTrigger_(form);
+    form.getResponses().forEach(function (response) {
+      try {
+        submitCreatorPassResponse_(form, response);
+        sent += 1;
+      } catch (error) {
+        failed += 1;
+        console.error("Creator-pass sync failed for response " + response.getId() + " on form " + formId + ": " + String(error && error.message || error));
+      }
+    });
+  });
+  Logger.log("Creator-pass response sync finished. Sent or already recorded: " + sent + "; failed: " + failed + ".");
+}
+
+function submitCreatorPassResponse_(form, response) {
   const properties = PropertiesService.getScriptProperties();
   const eventId = properties.getProperty("EVENT_FOR_FORM_" + form.getId());
   const webhookUrl = properties.getProperty("RSVP_CREATOR_PASS_WEBHOOK_URL");
@@ -107,7 +226,8 @@ function onCreatorPassSubmit(e) {
     muteHttpExceptions: true,
   });
   if (result.getResponseCode() < 200 || result.getResponseCode() >= 300) {
-    throw new Error("RSVP admin could not save this application (HTTP " + result.getResponseCode() + "). The response remains available in Google Forms.");
+    const responseText = String(result.getContentText() || "").slice(0, 300);
+    throw new Error("RSVP admin could not save this application (HTTP " + result.getResponseCode() + "): " + responseText + ". The response remains available in Google Forms.");
   }
 }
 

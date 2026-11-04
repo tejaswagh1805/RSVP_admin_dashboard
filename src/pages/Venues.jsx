@@ -4,35 +4,55 @@ import { api } from '../api.js';
 import { EmptyState, PageIntro } from '../components/UI.jsx';
 
 export const VENUE_CATEGORIES = ['Our partners', 'Desi luxe', 'Dinner to party', 'Bars & night culture', 'Coffee', 'Daytime & alcohol-free'];
-const blankVenue = () => ({ category: VENUE_CATEGORIES[0], name: '', tagline: '', description: '', location: '', highlights: '', offer: '', featuredDate: '', websiteUrl: '', moreInfoUrl: '', displayOrder: 0, contentReviewed: false, featured: false });
+const blankVenue = () => ({ category: VENUE_CATEGORIES[0], name: '', tagline: '', description: '', location: '', highlights: '', offer: '', featuredDate: '', websiteUrl: '', moreInfoUrl: '', displayOrder: 0, contentReviewed: false, featured: false, galleryImages: [] });
 
 export default function Venues({ rows = [], act }) {
   const [form, setForm] = useState(blankVenue());
   const [editing, setEditing] = useState(null);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState('');
+  const [galleryFiles, setGalleryFiles] = useState([]);
+  const [galleryPreviews, setGalleryPreviews] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const clearForm = () => {
     if (preview) URL.revokeObjectURL(preview);
+    galleryPreviews.forEach((url) => URL.revokeObjectURL(url));
     setForm(blankVenue()); setEditing(null); setFile(null); setPreview(''); setError('');
+    setGalleryFiles([]); setGalleryPreviews([]);
   };
   const chooseFile = (next) => {
     if (preview) URL.revokeObjectURL(preview);
     setError('');
     if (!next) { setFile(null); setPreview(''); return; }
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(next.type) || next.size > 12 * 1024 * 1024) {
-      setFile(null); setPreview(''); setError('Choose a JPG, PNG or WebP image up to 12 MB.'); return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(next.type) || next.size > 50 * 1024 * 1024) {
+      setFile(null); setPreview(''); setError('Choose a JPG, PNG or WebP image up to 50 MB.'); return;
     }
     setFile(next); setPreview(URL.createObjectURL(next));
   };
   const startEdit = (venue) => {
     if (preview) URL.revokeObjectURL(preview);
+    galleryPreviews.forEach((url) => URL.revokeObjectURL(url));
     setEditing(venue);
-    setForm({ category: venue.category, name: venue.name || '', tagline: venue.tagline || '', description: venue.description || '', location: venue.location || '', highlights: (venue.highlights || []).join('\n'), offer: venue.offer || '', featuredDate: venue.featuredDate || '', websiteUrl: venue.websiteUrl || '', moreInfoUrl: venue.moreInfoUrl || '', displayOrder: venue.displayOrder || 0, contentReviewed: Boolean(venue.contentReviewed), featured: Boolean(venue.featured) });
-    setFile(null); setPreview(''); setError('');
+    setForm({ category: venue.category, name: venue.name || '', tagline: venue.tagline || '', description: venue.description || '', location: venue.location || '', highlights: (venue.highlights || []).join('\n'), offer: venue.offer || '', featuredDate: venue.featuredDate || '', websiteUrl: venue.websiteUrl || '', moreInfoUrl: venue.moreInfoUrl || '', displayOrder: venue.displayOrder || 0, contentReviewed: Boolean(venue.contentReviewed), featured: Boolean(venue.featured), galleryImages: venue.galleryImages || [] });
+    setFile(null); setPreview(''); setGalleryFiles([]); setGalleryPreviews([]); setError('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const addGalleryFiles = (files) => {
+    const selected = [...files];
+    if (form.galleryImages.length + galleryFiles.length + selected.length > 12) { setError('A venue can have up to 12 gallery photos.'); return; }
+    const invalid = selected.find((item) => !['image/jpeg', 'image/png', 'image/webp'].includes(item.type) || item.size > 50 * 1024 * 1024);
+    if (invalid) { setError('Choose JPG, PNG or WebP gallery photos up to 50 MB each.'); return; }
+    setError('');
+    setGalleryFiles((current) => [...current, ...selected]);
+    setGalleryPreviews((current) => [...current, ...selected.map((item) => URL.createObjectURL(item))]);
+  };
+  const removeGalleryImage = (index) => set('galleryImages', form.galleryImages.filter((_, itemIndex) => itemIndex !== index));
+  const removeGalleryFile = (index) => {
+    URL.revokeObjectURL(galleryPreviews[index]);
+    setGalleryFiles((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    setGalleryPreviews((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
   const submit = async (event) => {
     event.preventDefault();
@@ -42,10 +62,12 @@ export default function Venues({ rows = [], act }) {
       let imageUrl = editing?.imageUrl || '';
       let objectKey = editing?.objectKey || '';
       if (file) {
-        const upload = await api.uploadMedia(file);
+        const upload = await api.uploadMedia(file, { venueImage: true });
         imageUrl = upload.publicUrl; objectKey = upload.key;
       }
-      const payload = { ...form, name: form.name.trim(), tagline: form.tagline.trim(), description: form.description.trim(), location: form.location.trim(), highlights: form.highlights.split(/\r?\n/).map((item) => item.trim()).filter(Boolean), offer: form.offer.trim(), imageUrl, objectKey };
+      const uploadedGallery = await Promise.all(galleryFiles.map((galleryFile) => api.uploadMedia(galleryFile, { venueImage: true })));
+      const galleryImages = [...form.galleryImages, ...uploadedGallery.map((upload) => upload.publicUrl)];
+      const payload = { ...form, galleryImages, name: form.name.trim(), tagline: form.tagline.trim(), description: form.description.trim(), location: form.location.trim(), highlights: form.highlights.split(/\r?\n/).map((item) => item.trim()).filter(Boolean), offer: form.offer.trim(), imageUrl, objectKey };
       if (editing) {
         await api.updateVenue(editing.id, payload);
         await act(() => Promise.resolve(), 'Venue details saved');
@@ -78,8 +100,9 @@ export default function Venues({ rows = [], act }) {
         <label className="field"><span>Website URL</span><input type="url" maxLength={500} value={form.websiteUrl} onChange={(event) => set('websiteUrl', event.target.value)} placeholder="https://venue.com" /></label>
         <label className="field"><span>More info URL</span><input type="url" maxLength={500} value={form.moreInfoUrl} onChange={(event) => set('moreInfoUrl', event.target.value)} placeholder="https://guide-or-review.com" /></label>
         <div className="venue-form-section venue-form-wide"><span>04</span><div><strong>Image & publishing review</strong><small>Use approved venue photography and confirm the details before publishing.</small></div></div>
-        <label className="field venue-form-wide"><span>Venue image (JPG, PNG or WebP, up to 12 MB) {editing ? '— optional, choose a new image to replace it' : '*'}</span><input className="venue-image-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { chooseFile(event.target.files?.[0] || null); event.target.value = ''; }} /></label>
+        <label className="field venue-form-wide"><span>Venue image (JPG, PNG or WebP, up to 50 MB) {editing ? '— optional, choose a new image to replace it' : '*'}</span><input className="venue-image-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { chooseFile(event.target.files?.[0] || null); event.target.value = ''; }} /></label>
         {(preview || (editing && !file)) ? <img className="venue-form-preview" src={preview || editing.imageUrl} alt="Venue image preview" /> : null}
+        <div className="field venue-form-wide"><span>Venue photo gallery ({form.galleryImages.length + galleryFiles.length}/12)</span><small>These photos appear below the venue story on its customer page. The main venue image is included automatically. Up to 50 MB per photo.</small><input className="venue-image-input" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => { addGalleryFiles(event.target.files || []); event.target.value = ''; }} /><div className="venue-admin-gallery-preview">{form.galleryImages.map((url, index) => <div className="venue-admin-gallery-thumb" key={`${url}-${index}`}><img src={url} alt={`Venue gallery ${index + 1}`} /><button type="button" aria-label="Remove gallery image" onClick={() => removeGalleryImage(index)}><X size={14} /></button></div>)}{galleryPreviews.map((url, index) => <div className="venue-admin-gallery-thumb" key={url}><img src={url} alt={`New gallery photo ${index + 1}`} /><button type="button" aria-label="Remove selected image" onClick={() => removeGalleryFile(index)}><X size={14} /></button></div>)}</div></div>
         <label className="venue-review-check venue-form-wide"><input type="checkbox" checked={form.contentReviewed} onChange={(event) => set('contentReviewed', event.target.checked)} /><span><strong>Publishing review confirmed</strong><small>Venue details and current offers checked; approved image and venue sign-off received. Without this, the venue saves as a hidden draft.</small></span><Check size={17} /></label>
         <div className="venue-form-wide venue-form-actions"><button className="button button-primary" disabled={busy || !form.name.trim() || (!editing && !file)}>{busy ? 'Saving…' : editing ? 'Save venue changes' : <><Plus size={16} /> Save venue</>}</button>{form.contentReviewed ? <span className="venue-review-state"><Sparkles size={14} /> Ready to publish</span> : <span className="venue-review-state">Saved as draft until review is confirmed</span>}</div>
         {error ? <p className="event-image-error venue-form-wide" role="alert">{error}</p> : null}
