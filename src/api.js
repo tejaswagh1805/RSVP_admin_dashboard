@@ -1,25 +1,35 @@
 const API = '/api';
 
 export async function request(path, options = {}) {
-  let response;
-  try {
-    response = await fetch(`${API}${path}`, {
-      headers: { 'Content-Type': 'application/json', ...options.headers },
-      credentials: 'same-origin',
-      ...options,
-    });
-  } catch (cause) {
-    const error = new Error('Could not connect to the RSVP admin server. Check your connection and retry; your form is still open.');
-    error.cause = cause;
+  const send = async () => {
+    let response;
+    try {
+      response = await fetch(`${API}${path}`, {
+        headers: { 'Content-Type': 'application/json', ...options.headers },
+        credentials: 'same-origin',
+        ...options,
+      });
+    } catch (cause) {
+      const error = new Error('Could not connect to the RSVP admin server. Check your connection and retry; your form is still open.');
+      error.cause = cause;
+      throw error;
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.error || 'The request could not be completed.');
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  };
+  try { return await send(); }
+  catch (error) {
+    if (path === '/auth/me' && error.status === 503) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1400));
+      return send();
+    }
     throw error;
   }
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(data.error || 'The request could not be completed.');
-    error.status = response.status;
-    throw error;
-  }
-  return data;
 }
 
 async function prepareImageForUpload(file) {
@@ -92,6 +102,7 @@ export const api = {
   updatePeopleProfile: (id, profile) => request(`/people-profiles/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(profile) }),
   setPeopleProfileActive: (id, active) => request(`/people-profiles/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ active }) }),
   updateEvent: (id, update) => request(`/events/${id}`, { method: 'PATCH', body: JSON.stringify(typeof update === 'string' ? { status: update } : update) }),
+  setEventTopPick: (id, topPick) => request(`/events/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ topPick }) }),
   createCreatorPassForm: (id) => request(`/events/${encodeURIComponent(id)}/creator-pass-form`, { method: 'POST' }),
   deleteEvent: (id) => request(`/events/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   approveTicketRequest: (id) => request(`/ticket-requests/${encodeURIComponent(id)}/approve`, { method: 'POST' }),

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowUpRight, CalendarDays, Check, Download, ImagePlus, MapPin, Plus, RefreshCw, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, CalendarDays, Check, Download, ImagePlus, MapPin, Plus, RefreshCw, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { api } from '../api.js';
 import { EmptyState, PageIntro } from '../components/UI.jsx';
 import { TRACKS, dateLabel } from '../lib/constants.js';
@@ -171,6 +171,7 @@ function EventAdminList({ rows, openModal, setEventPrice, act, showRsvps, delete
           <div><span>Ticket price</span><strong>{Number(event.ticketPrice || 0).toFixed(2)} {event.ticketCurrency || 'AED'}</strong><small>{event.status === 'closed' ? 'Event closed' : 'Current listing price'}</small></div>
         </div>
         <div className="event-admin-actions">
+          <button className={`small-action${event.topPick ? ' publish-action' : ''}`} disabled={event.status !== 'published' && !event.topPick} title={event.status !== 'published' && !event.topPick ? 'Publish this event before adding it to RSVP Top Picks.' : undefined} onClick={() => act(() => api.setEventTopPick(event.id, !event.topPick), event.topPick ? 'Removed from RSVP Top Picks' : 'Added to RSVP Top Picks')}><Star size={13} fill={event.topPick ? 'currentColor' : 'none'} />{event.topPick ? 'RSVP Top Pick' : 'Add to Top Picks'}</button>
           <button className="small-action" onClick={() => openModal({ type: 'edit-event', event })}>Edit event</button>
           <button className="small-action" onClick={() => setEventPrice(event)}>Edit price</button>
           {event.status === 'published' ? event.creatorPassFormUrl ? <a className="small-action" href={event.creatorPassFormUrl} target="_blank" rel="noreferrer">Open creator pass form</a> : <button className="small-action publish-action" disabled={creatingFormEvent === event.id} onClick={() => onCreateCreatorPassForm(event)}>{creatingFormEvent === event.id ? 'Creating form…' : 'Create creator pass form'}</button> : null}

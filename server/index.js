@@ -44,6 +44,8 @@ const sql =
   databaseUrl && !/USER:PASSWORD|@HOST\/DBNAME/i.test(databaseUrl)
     ? neon(databaseUrl)
     : null;
+let databaseStatus = sql ? "checking" : "unconfigured";
+let databaseLastError = "";
 if (databaseUrl && !sql)
   console.warn(
     "DATABASE_URL still contains the example placeholder; API is using demo data. Update the project-root .env to use Neon.",
@@ -537,7 +539,7 @@ const selectFor = {
   members:
     'SELECT id, member_number AS "memberNumber", name, email, track, source_track AS "sourceTrack", rank, points, events, city, profile_url AS "profileUrl", handle, platform, followers, mobile, outlet, member_role AS role, all_profiles AS "allProfiles", status, joined::text AS joined FROM members ORDER BY name',
   events:
-    'SELECT id, title, brand, venue, date::text AS date, end_date::text AS \"endDate\", time, end_time AS \"endTime\", gates_open_time AS \"gatesOpenTime\", area, category, tracks, capacity, confirmed, ticket_price AS \"ticketPrice\", ticket_currency AS \"ticketCurrency\", ticket_url AS \"ticketUrl\", reservation_phone AS \"reservationPhone\", creator_pass_note AS \"creatorPassNote\", creator_pass_form_url AS \"creatorPassFormUrl\", creator_pass_form_error AS \"creatorPassFormError\", age_restriction AS \"ageRestriction\", hashtag, application_deadline::text AS \"applicationDeadline\", action_label AS \"actionLabel\", dress_code AS \"dressCode\", about, included, who_is_invited AS \"whoIsInvited\", host_note AS \"hostNote\", COALESCE(image_gallery[1], image_data) AS \"imageData\", image_gallery AS \"imageGallery\", video_url AS \"videoUrl\", track_capacities AS \"trackCapacities\", influencer_deliverables AS \"influencerDeliverables\", map_url AS \"mapUrl\", (SELECT COUNT(*)::int FROM event_rsvp_requests r WHERE r.event_id = events.id AND r.status = \'pending\') AS \"pendingRsvpCount\", status FROM events ORDER BY date',
+    'SELECT id, title, brand, venue, date::text AS date, end_date::text AS \"endDate\", time, end_time AS \"endTime\", gates_open_time AS \"gatesOpenTime\", area, category, tracks, capacity, confirmed, ticket_price AS \"ticketPrice\", ticket_currency AS \"ticketCurrency\", ticket_url AS \"ticketUrl\", reservation_phone AS \"reservationPhone\", creator_pass_note AS \"creatorPassNote\", creator_pass_form_url AS \"creatorPassFormUrl\", creator_pass_form_error AS \"creatorPassFormError\", age_restriction AS \"ageRestriction\", hashtag, application_deadline::text AS \"applicationDeadline\", action_label AS \"actionLabel\", dress_code AS \"dressCode\", about, included, who_is_invited AS \"whoIsInvited\", host_note AS \"hostNote\", COALESCE(image_gallery[1], image_data) AS \"imageData\", image_gallery AS \"imageGallery\", video_url AS \"videoUrl\", track_capacities AS \"trackCapacities\", influencer_deliverables AS \"influencerDeliverables\", map_url AS \"mapUrl\", top_pick AS \"topPick\", (SELECT COUNT(*)::int FROM event_rsvp_requests r WHERE r.event_id = events.id AND r.status = \'pending\') AS \"pendingRsvpCount\", status FROM events ORDER BY date',
   wall_posts:
     'SELECT id, brand, type, body, posted, boosted, status, event_id AS "eventId" FROM wall_posts ORDER BY created_at DESC',
   site_media:
@@ -710,9 +712,52 @@ function verifyStripeSignature(req) {
   return expected.length === received.length && timingSafeEqual(expected, received);
 }
 
-app.get("/api/health", (_req, res) =>
-  res.json({ ok: true, database: Boolean(sql) }),
-);
+app.get("/api/health", async (_req, res) => {
+  if (!sql) return res.json({ ok: true, database: "unconfigured", message: "DATABASE_URL is not configured; API is using demo data." });
+  try {
+    await queryDatabase(() => sql`SELECT 1 AS ok`);
+    return res.json({ ok: true, database: "connected" });
+  } catch {
+    return res.status(503).json({ ok: false, database: databaseStatus, databaseError: databaseLastError });
+  }
+});
+function transientDatabaseError(error) {
+  const codes = new Set(["UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET", "ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT"]);
+  for (let current = error; current; current = current.sourceError?.cause || current.cause) {
+    if (codes.has(current.code) || /fetch failed|socket hang up/i.test(current.message || "")) return true;
+  }
+  return false;
+}
+async function queryDatabase(query) {
+  try {
+    const result = await query();
+    databaseStatus = "connected";
+    databaseLastError = "";
+    return result;
+  } catch (error) {
+    if (!transientDatabaseError(error)) {
+      databaseStatus = "error";
+      databaseLastError = "Database rejected the request; check credentials and schema.";
+      throw error;
+    }
+    databaseStatus = "unavailable";
+    databaseLastError = "Database network connection failed.";
+    console.warn("Neon request failed; retrying once after a short delay.");
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    try {
+      const result = await query();
+      databaseStatus = "connected";
+      databaseLastError = "";
+      return result;
+    } catch (retryError) {
+      databaseStatus = transientDatabaseError(retryError) ? "unavailable" : "error";
+      databaseLastError = transientDatabaseError(retryError)
+        ? "Database network connection failed after retry."
+        : "Database rejected the request; check credentials and schema.";
+      throw retryError;
+    }
+  }
+}
 app.get("/api/events/:id/image", async (req, res, next) => {
   try {
     if (!sql) return res.status(404).end();
@@ -912,7 +957,9 @@ app.post("/api/ticket-requests/:id/approve", async (req, res, next) => {
 });
 app.get("/api/auth/me", async (req, res, next) => {
   try {
-    res.json({ admin: await currentAdmin(req), demoMode: !sql });
+    if (!sql) return res.json({ admin: null, demoMode: true, database: "unconfigured" });
+    const admin = await queryDatabase(() => currentAdmin(req));
+    res.json({ admin, demoMode: false, database: databaseStatus });
   } catch (error) {
     next(error);
   }
@@ -925,7 +972,7 @@ app.post("/api/auth/login", async (req, res, next) => {
     const password = String(req.body.password || "");
     const admin = sql
       ? (
-          await sql`SELECT id, name, email, password_hash, role FROM admin_users WHERE lower(email) = ${email} AND active = TRUE LIMIT 1`
+          await queryDatabase(() => sql`SELECT id, name, email, password_hash, role FROM admin_users WHERE lower(email) = ${email} AND active = TRUE LIMIT 1`)
         )[0]
       : demoAdmins.find((item) => item.email === email);
     const passwordHash = admin?.password_hash || admin?.passwordHash;
@@ -1370,7 +1417,7 @@ app.get("/api/mobile/events", async (_req, res, next) => {
         ticket_url AS "ticketUrl", reservation_phone AS "reservationPhone",
         creator_pass_note AS "creatorPassNote", age_restriction AS "ageRestriction",
         hashtag, track_capacities AS "trackCapacities", influencer_deliverables AS "influencerDeliverables",
-        map_url AS "mapUrl", image_gallery AS "imageGallery", image_data AS "imageData",
+        map_url AS "mapUrl", image_gallery AS "imageGallery", image_data AS "imageData", top_pick AS "topPick",
         video_url AS video, status
       FROM events WHERE status IN ('published', 'closed') ORDER BY date, time
     `;
@@ -2587,6 +2634,23 @@ app.post("/api/events/:id/creator-pass-form", async (req, res, next) => {
 });
 app.patch("/api/events/:id", async (req, res, next) => {
   try {
+    if (Object.keys(req.body).length === 1 && typeof req.body.topPick === "boolean") {
+      const topPick = req.body.topPick;
+      if (!sql) {
+        const item = demo.events.find((row) => row.id === req.params.id);
+        if (!item) return res.status(404).json({ error: "Event not found." });
+        if (topPick && item.status !== "published") return res.status(400).json({ error: "Publish the event before adding it to RSVP Top Picks." });
+        item.topPick = topPick;
+        return res.json(item);
+      }
+      const rows = await sql`UPDATE events SET top_pick = ${topPick}, updated_at = NOW() WHERE id = ${req.params.id} AND (${!topPick} OR status = 'published') RETURNING id, top_pick AS "topPick"`;
+      if (!rows[0]) {
+        const exists = await sql`SELECT id FROM events WHERE id = ${req.params.id} LIMIT 1`;
+        if (!exists[0]) return res.status(404).json({ error: "Event not found." });
+        return res.status(400).json({ error: "Publish the event before adding it to RSVP Top Picks." });
+      }
+      return res.json(rows[0]);
+    }
     if (Object.hasOwn(req.body, "title")) {
       const id = text(req.params.id, 180);
       const title = text(req.body.title, 180);

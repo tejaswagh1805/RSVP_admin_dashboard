@@ -27,6 +27,8 @@ export default function App() {
   const [demoMode, setDemoMode] = useState(false);
   const [authError, setAuthError] = useState('');
   const [authNotice, setAuthNotice] = useState('');
+  const [dbRetrying, setDbRetrying] = useState(false);
+  const [dbUnavailable, setDbUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
@@ -62,11 +64,14 @@ export default function App() {
       if (!active) return;
       setAdmin(currentAdmin);
       setDemoMode(isDemoMode);
+      setDbUnavailable(false);
       if (currentAdmin) await refresh();
       else setLoading(false);
     }).catch((err) => {
       if (!active) return;
       setAuthError(err.message);
+      setDbRetrying(err.status === 503 || !err.status);
+      setDbUnavailable(err.status === 503 || !err.status);
       setLoading(false);
     }).finally(() => { if (active) setAuthLoading(false); });
     return () => { active = false; };
@@ -135,7 +140,7 @@ export default function App() {
 
   if (location.pathname.replace(/\/$/, '') === '/register') return <Register />;
   if (authLoading) return <main className="signin-screen"><div className="loading-state"><span className="spinner" /> Checking admin session…</div></main>;
-  if (!admin) return <SignIn onSignIn={signIn} error={authError} notice={authNotice} demoMode={demoMode} />;
+  if (!admin) return <SignIn onSignIn={signIn} error={authError} notice={authNotice} demoMode={demoMode} retrying={dbRetrying} databaseUnavailable={dbUnavailable} onRetry={async () => { if (dbRetrying) return; setDbRetrying(true); try { const { admin: currentAdmin, demoMode: isDemoMode } = await api.me(); setAdmin(currentAdmin); setDemoMode(isDemoMode); setDbUnavailable(false); setAuthError(''); if (currentAdmin) { setLoading(true); await refresh(); } else setAuthNotice('Database connection is healthy. Sign in with your administrator account.'); } catch (err) { setAuthError(err.message); setDbUnavailable(err.status === 503 || !err.status); } finally { setDbRetrying(false); } }} />;
 
   return <div className="app-shell">
     <AdminSidebar page={page} pendingCount={pending} open={mobileNav} onClose={() => setMobileNav(false)} navigate={navigate} admin={admin} onSignOut={() => signOut(false)} onSwitchAccount={() => signOut(true)} />
