@@ -103,6 +103,7 @@ export const api = {
   setPeopleProfileActive: (id, active) => request(`/people-profiles/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ active }) }),
   updateEvent: (id, update) => request(`/events/${id}`, { method: 'PATCH', body: JSON.stringify(typeof update === 'string' ? { status: update } : update) }),
   setEventTopPick: (id, topPick) => request(`/events/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ topPick }) }),
+  setEventLatest: (id, latestEvent) => request(`/events/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ latestEvent }) }),
   createCreatorPassForm: (id) => request(`/events/${encodeURIComponent(id)}/creator-pass-form`, { method: 'POST' }),
   deleteEvent: (id) => request(`/events/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   approveTicketRequest: (id) => request(`/ticket-requests/${encodeURIComponent(id)}/approve`, { method: 'POST' }),

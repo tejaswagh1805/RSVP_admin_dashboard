@@ -539,7 +539,7 @@ const selectFor = {
   members:
     'SELECT id, member_number AS "memberNumber", name, email, track, source_track AS "sourceTrack", rank, points, events, city, profile_url AS "profileUrl", handle, platform, followers, mobile, outlet, member_role AS role, all_profiles AS "allProfiles", status, joined::text AS joined FROM members ORDER BY name',
   events:
-    'SELECT id, title, brand, venue, date::text AS date, end_date::text AS \"endDate\", time, end_time AS \"endTime\", gates_open_time AS \"gatesOpenTime\", area, category, tracks, capacity, confirmed, ticket_price AS \"ticketPrice\", ticket_currency AS \"ticketCurrency\", ticket_url AS \"ticketUrl\", reservation_phone AS \"reservationPhone\", creator_pass_note AS \"creatorPassNote\", creator_pass_form_url AS \"creatorPassFormUrl\", creator_pass_form_error AS \"creatorPassFormError\", age_restriction AS \"ageRestriction\", hashtag, application_deadline::text AS \"applicationDeadline\", action_label AS \"actionLabel\", dress_code AS \"dressCode\", about, included, who_is_invited AS \"whoIsInvited\", host_note AS \"hostNote\", COALESCE(image_gallery[1], image_data) AS \"imageData\", image_gallery AS \"imageGallery\", video_url AS \"videoUrl\", track_capacities AS \"trackCapacities\", influencer_deliverables AS \"influencerDeliverables\", map_url AS \"mapUrl\", top_pick AS \"topPick\", (SELECT COUNT(*)::int FROM event_rsvp_requests r WHERE r.event_id = events.id AND r.status = \'pending\') AS \"pendingRsvpCount\", status FROM events ORDER BY date',
+    'SELECT id, title, brand, venue, date::text AS \"date\", end_date::text AS \"endDate\", time, end_time AS \"endTime\", gates_open_time AS \"gatesOpenTime\", area, category, tracks, capacity, confirmed, ticket_price AS \"ticketPrice\", ticket_currency AS \"ticketCurrency\", ticket_url AS \"ticketUrl\", reservation_phone AS \"reservationPhone\", creator_pass_note AS \"creatorPassNote\", creator_pass_form_url AS \"creatorPassFormUrl\", creator_pass_form_error AS \"creatorPassFormError\", age_restriction AS \"ageRestriction\", hashtag, application_deadline::text AS \"applicationDeadline\", action_label AS \"actionLabel\", dress_code AS \"dressCode\", about, included, who_is_invited AS \"whoIsInvited\", host_note AS \"hostNote\", COALESCE(image_gallery[1], image_data) AS \"imageData\", image_gallery AS \"imageGallery\", video_url AS \"videoUrl\", track_capacities AS \"trackCapacities\", influencer_deliverables AS \"influencerDeliverables\", map_url AS \"mapUrl\", latest_event AS \"latestEvent\", top_pick AS \"topPick\", (SELECT COUNT(*)::int FROM event_rsvp_requests r WHERE r.event_id = events.id AND r.status = \'pending\') AS \"pendingRsvpCount\", status FROM events ORDER BY date',
   wall_posts:
     'SELECT id, brand, type, body, posted, boosted, status, event_id AS "eventId" FROM wall_posts ORDER BY created_at DESC',
   site_media:
@@ -562,9 +562,20 @@ const getRows = async (table) => {
     try { return await sql.query(selectFor[table]); }
     catch (error) {
       const message = String(error?.message || "").toLowerCase();
-      if (table !== "events" || !message.includes("top_pick") || !message.includes("does not exist")) throw error;
-      console.warn("Events loaded without Top Picks support; apply the events.top_pick migration to enable curated picks.");
-      return sql.query(selectFor.events.replace('top_pick AS "topPick"', 'FALSE AS "topPick"'));
+      if (table !== "events" || !message.includes("does not exist")) throw error;
+      if (!message.includes("latest_event") && !message.includes("top_pick")) throw error;
+      console.warn("Events loaded with legacy homepage defaults; apply latest_event and top_pick migrations to enable admin curation.");
+      let legacy = selectFor.events
+        .replace('latest_event AS "latestEvent"', 'TRUE AS "latestEvent"')
+        .replace('top_pick AS "topPick"', 'FALSE AS "topPick"');
+      if (!message.includes("latest_event")) legacy = legacy.replace('TRUE AS "latestEvent"', 'latest_event AS "latestEvent"');
+      if (!message.includes("top_pick")) legacy = legacy.replace('FALSE AS "topPick"', 'top_pick AS "topPick"');
+      try { return await sql.query(legacy); }
+      catch (legacyError) {
+        const legacyMessage = String(legacyError?.message || "").toLowerCase();
+        if (!legacyMessage.includes("top_pick") || !legacyMessage.includes("does not exist")) throw legacyError;
+        return sql.query(legacy.replace('top_pick AS "topPick"', 'FALSE AS "topPick"'));
+      }
     }
   }
   const rows = structuredClone(demo[table]);
@@ -1425,7 +1436,8 @@ app.get("/api/mobile/events", async (_req, res, next) => {
         ticket_url AS "ticketUrl", reservation_phone AS "reservationPhone",
         creator_pass_note AS "creatorPassNote", age_restriction AS "ageRestriction",
         hashtag, track_capacities AS "trackCapacities", influencer_deliverables AS "influencerDeliverables",
-        map_url AS "mapUrl", image_gallery AS "imageGallery", image_data AS "imageData", top_pick AS "topPick",
+        map_url AS "mapUrl", image_gallery AS "imageGallery", image_data AS "imageData",
+        latest_event AS "latestEvent", top_pick AS "topPick",
         video_url AS video, status
       FROM events WHERE status IN ('published', 'closed') ORDER BY date, time
     `;
@@ -2642,27 +2654,34 @@ app.post("/api/events/:id/creator-pass-form", async (req, res, next) => {
 });
 app.patch("/api/events/:id", async (req, res, next) => {
   try {
-    if (Object.keys(req.body).length === 1 && typeof req.body.topPick === "boolean") {
-      const topPick = req.body.topPick;
+    const homepageFlag = Object.keys(req.body).length === 1 && typeof req.body.topPick === "boolean"
+      ? { key: "topPick", column: "top_pick", value: req.body.topPick, label: "RSVP Top Picks" }
+      : Object.keys(req.body).length === 1 && typeof req.body.latestEvent === "boolean"
+        ? { key: "latestEvent", column: "latest_event", value: req.body.latestEvent, label: "Latest Events" }
+        : null;
+    if (homepageFlag) {
+      const { key, column, value, label } = homepageFlag;
       if (!sql) {
         const item = demo.events.find((row) => row.id === req.params.id);
         if (!item) return res.status(404).json({ error: "Event not found." });
-        if (topPick && item.status !== "published") return res.status(400).json({ error: "Publish the event before adding it to RSVP Top Picks." });
-        item.topPick = topPick;
+        if (value && item.status !== "published") return res.status(400).json({ error: `Publish the event before adding it to ${label}.` });
+        item[key] = value;
         return res.json(item);
       }
       let rows;
       try {
-        rows = await sql`UPDATE events SET top_pick = ${topPick}, updated_at = NOW() WHERE id = ${req.params.id} AND (${!topPick} OR status = 'published') RETURNING id, top_pick AS "topPick"`;
+        rows = key === "topPick"
+          ? await sql`UPDATE events SET top_pick = ${value}, updated_at = NOW() WHERE id = ${req.params.id} AND (${!value} OR status = 'published') RETURNING id, top_pick AS "topPick"`
+          : await sql`UPDATE events SET latest_event = ${value}, updated_at = NOW() WHERE id = ${req.params.id} AND (${!value} OR status = 'published') RETURNING id, latest_event AS "latestEvent"`;
       } catch (error) {
         const message = String(error?.message || "").toLowerCase();
-        if (message.includes("top_pick") && message.includes("does not exist")) return res.status(503).json({ error: "RSVP Top Picks are not enabled in this database yet. Apply the events.top_pick migration, then retry." });
+        if (message.includes(homepageFlag.column) && message.includes("does not exist")) return res.status(503).json({ error: `${label} are not enabled in this database yet. Apply the events section migration, then retry.` });
         throw error;
       }
       if (!rows[0]) {
         const exists = await sql`SELECT id FROM events WHERE id = ${req.params.id} LIMIT 1`;
         if (!exists[0]) return res.status(404).json({ error: "Event not found." });
-        return res.status(400).json({ error: "Publish the event before adding it to RSVP Top Picks." });
+        return res.status(400).json({ error: `Publish the event before adding it to ${label}.` });
       }
       return res.json(rows[0]);
     }
