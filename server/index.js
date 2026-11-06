@@ -558,7 +558,15 @@ const selectFor = {
      ORDER BY name`,
 };
 const getRows = async (table) => {
-  if (sql) return sql.query(selectFor[table]);
+  if (sql) {
+    try { return await sql.query(selectFor[table]); }
+    catch (error) {
+      const message = String(error?.message || "").toLowerCase();
+      if (table !== "events" || !message.includes("top_pick") || !message.includes("does not exist")) throw error;
+      console.warn("Events loaded without Top Picks support; apply the events.top_pick migration to enable curated picks.");
+      return sql.query(selectFor.events.replace('top_pick AS "topPick"', 'FALSE AS "topPick"'));
+    }
+  }
   const rows = structuredClone(demo[table]);
   return ["applications", "members"].includes(table)
     ? rows.map(({ passwordHash: _passwordHash, ...row }) => row)
@@ -2643,7 +2651,14 @@ app.patch("/api/events/:id", async (req, res, next) => {
         item.topPick = topPick;
         return res.json(item);
       }
-      const rows = await sql`UPDATE events SET top_pick = ${topPick}, updated_at = NOW() WHERE id = ${req.params.id} AND (${!topPick} OR status = 'published') RETURNING id, top_pick AS "topPick"`;
+      let rows;
+      try {
+        rows = await sql`UPDATE events SET top_pick = ${topPick}, updated_at = NOW() WHERE id = ${req.params.id} AND (${!topPick} OR status = 'published') RETURNING id, top_pick AS "topPick"`;
+      } catch (error) {
+        const message = String(error?.message || "").toLowerCase();
+        if (message.includes("top_pick") && message.includes("does not exist")) return res.status(503).json({ error: "RSVP Top Picks are not enabled in this database yet. Apply the events.top_pick migration, then retry." });
+        throw error;
+      }
       if (!rows[0]) {
         const exists = await sql`SELECT id FROM events WHERE id = ${req.params.id} LIMIT 1`;
         if (!exists[0]) return res.status(404).json({ error: "Event not found." });
