@@ -539,7 +539,7 @@ const selectFor = {
   members:
     'SELECT id, member_number AS "memberNumber", name, email, track, source_track AS "sourceTrack", rank, points, events, city, profile_url AS "profileUrl", handle, platform, followers, mobile, outlet, member_role AS role, all_profiles AS "allProfiles", status, joined::text AS joined FROM members ORDER BY name',
   events:
-    'SELECT id, title, brand, venue, date::text AS \"date\", end_date::text AS \"endDate\", time, end_time AS \"endTime\", gates_open_time AS \"gatesOpenTime\", area, category, tracks, capacity, confirmed, ticket_price AS \"ticketPrice\", ticket_currency AS \"ticketCurrency\", ticket_url AS \"ticketUrl\", reservation_phone AS \"reservationPhone\", creator_pass_note AS \"creatorPassNote\", creator_pass_form_url AS \"creatorPassFormUrl\", creator_pass_form_error AS \"creatorPassFormError\", age_restriction AS \"ageRestriction\", hashtag, application_deadline::text AS \"applicationDeadline\", action_label AS \"actionLabel\", dress_code AS \"dressCode\", about, included, who_is_invited AS \"whoIsInvited\", host_note AS \"hostNote\", COALESCE(image_gallery[1], image_data) AS \"imageData\", image_gallery AS \"imageGallery\", video_url AS \"videoUrl\", track_capacities AS \"trackCapacities\", influencer_deliverables AS \"influencerDeliverables\", map_url AS \"mapUrl\", latest_event AS \"latestEvent\", top_pick AS \"topPick\", (SELECT COUNT(*)::int FROM event_rsvp_requests r WHERE r.event_id = events.id AND r.status = \'pending\') AS \"pendingRsvpCount\", status FROM events ORDER BY date',
+    'SELECT id, title, brand, venue, date::text AS \"date\", end_date::text AS \"endDate\", time, end_time AS \"endTime\", gates_open_time AS \"gatesOpenTime\", area, category, tracks, capacity, confirmed, ticket_price AS \"ticketPrice\", ticket_currency AS \"ticketCurrency\", ticket_url AS \"ticketUrl\", reservation_phone AS \"reservationPhone\", creator_pass_note AS \"creatorPassNote\", creator_pass_form_url AS \"creatorPassFormUrl\", creator_pass_form_error AS \"creatorPassFormError\", age_restriction AS \"ageRestriction\", hashtag, application_deadline::text AS \"applicationDeadline\", action_label AS \"actionLabel\", dress_code AS \"dressCode\", about, included, who_is_invited AS \"whoIsInvited\", host_note AS \"hostNote\", COALESCE(image_gallery[1], image_data) AS \"imageData\", image_gallery AS \"imageGallery\", video_url AS \"videoUrl\", video_gallery AS \"videoUrlList\", track_capacities AS \"trackCapacities\", influencer_deliverables AS \"influencerDeliverables\", map_url AS \"mapUrl\", latest_event AS \"latestEvent\", top_pick AS \"topPick\", (SELECT COUNT(*)::int FROM event_rsvp_requests r WHERE r.event_id = events.id AND r.status = \'pending\') AS \"pendingRsvpCount\", status FROM events ORDER BY date',
   wall_posts:
     'SELECT id, brand, type, body, posted, boosted, status, event_id AS "eventId" FROM wall_posts ORDER BY created_at DESC',
   site_media:
@@ -1438,7 +1438,7 @@ app.get("/api/mobile/events", async (_req, res, next) => {
         hashtag, track_capacities AS "trackCapacities", influencer_deliverables AS "influencerDeliverables",
         map_url AS "mapUrl", image_gallery AS "imageGallery", image_data AS "imageData",
         latest_event AS "latestEvent", top_pick AS "topPick",
-        video_url AS video, status
+        video_url AS video, video_gallery AS videoUrlList, status
       FROM events WHERE status IN ('published', 'closed') ORDER BY date, time
     `;
     res.json(rows);
@@ -1663,6 +1663,8 @@ app.post("/api/media/upload-url", async (req, res, next) => {
     const filename = text(req.body.filename, 160);
     const contentType = text(req.body.contentType, 100).toLowerCase();
     const size = Number(req.body.size);
+    const eventId = req.body.purpose === "event" ? text(req.body.eventId, 100) : "";
+    if (req.body.eventId && !/^event-[a-zA-Z0-9-]{1,90}$/.test(eventId)) return res.status(400).json({ error: "Invalid event media folder." });
     const siteGalleryVideo = req.body.purpose === "site-gallery" && contentType.startsWith("video/");
     const siteGalleryCaptions = req.body.purpose === "site-gallery" && contentType === "text/vtt";
     const venueImage = req.body.purpose === "venue-image" && contentType.startsWith("image/");
@@ -1671,8 +1673,10 @@ app.post("/api/media/upload-url", async (req, res, next) => {
     const maxBytes = siteGalleryCaptions ? 1024 * 1024 : contentType.startsWith("video/") ? (siteGalleryVideo ? 500 : 100) * 1024 * 1024 : (venueImage ? 50 : 12) * 1024 * 1024;
     if (!Number.isInteger(size) || size <= 0 || size > maxBytes) return res.status(400).json({ error: `File must be smaller than ${contentType.startsWith("video/") ? `${siteGalleryVideo ? "500" : "100"} MB` : `${venueImage ? "50" : "12"} MB`}.` });
     const safeName = filename.normalize("NFKD").replace(/[^a-zA-Z0-9._-]/g, "-").slice(-100) || `upload.${extensions[contentType]}`;
-    // S3 has a flat keyspace; omit date prefixes so uploads appear directly in media/.
-    const key = `media/${crypto.randomUUID()}-${safeName}`;
+    // S3 folders are key prefixes; event media is grouped under its event ID.
+    const key = eventId
+      ? `media/events/${eventId}/${crypto.randomUUID()}-${safeName}`
+      : `media/${crypto.randomUUID()}-${safeName}`;
     const uploadUrl = await getSignedUrl(s3, new PutObjectCommand({ Bucket: mediaBucket, Key: key, ContentType: contentType, CacheControl: "public, max-age=31536000, immutable" }), { expiresIn: 300 });
     res.json({ uploadUrl, key, publicUrl: `${mediaBaseUrl}/${key}`, contentType, maxBytes });
   } catch (error) { next(error); }
@@ -2551,6 +2555,10 @@ app.post("/api/events", async (req, res, next) => {
     const whoIsInvited = text(req.body.whoIsInvited, 1500);
     const hostNote = text(req.body.hostNote, 1500);
     const videoUrl = String(req.body.videoUrl || "");
+    const videoUrlList = Array.isArray(req.body.videoUrlList)
+      ? req.body.videoUrlList.map((value) => String(value || ""))
+      : videoUrl ? [videoUrl] : [];
+    const eventId = text(req.body.id, 100);
     const imageDataList = Array.isArray(req.body.imageDataList)
       ? req.body.imageDataList.map((value) => String(value || ""))
       : req.body.imageData ? [String(req.body.imageData)] : [];
@@ -2574,13 +2582,13 @@ app.post("/api/events", async (req, res, next) => {
       return res.status(400).json({ error: "Invalid event status." });
     if (ticketUrl && !/^https:\/\//i.test(ticketUrl)) return res.status(400).json({ error: "Use a secure HTTPS ticket link." });
     if (
-      imageDataList.length > 5 ||
       imageDataList.some((image) => !/^https:\/\//.test(image) || (mediaBaseUrl && !image.startsWith(`${mediaBaseUrl}/media/`)))
     )
       return res
         .status(400)
-        .json({ error: "Choose up to 5 uploaded JPG, PNG or WebP images from the configured RSVP media bucket." });
-    if (videoUrl && (!mediaBaseUrl || !videoUrl.startsWith(`${mediaBaseUrl}/media/`))) return res.status(400).json({ error: "The event video must be uploaded to configured media storage." });
+        .json({ error: "Choose uploaded JPG, PNG or WebP images from the configured RSVP media bucket." });
+    if (videoUrlList.some((url) => !mediaBaseUrl || !url.startsWith(`${mediaBaseUrl}/media/`))) return res.status(400).json({ error: "All event videos must be uploaded to configured media storage." });
+    if (eventId && !/^event-[a-zA-Z0-9-]{1,90}$/.test(eventId)) return res.status(400).json({ error: "Invalid event ID." });
     if (!Number.isInteger(capacity) || capacity < 0 || capacity > 100000)
       return res.status(400).json({ error: tracks.length ? "Enter a guest capacity above zero." : "Capacity cannot be negative." });
     if (status === "published") {
@@ -2589,7 +2597,7 @@ app.post("/api/events", async (req, res, next) => {
       ].filter(Boolean);
       if (missing.length) return res.status(400).json({ error: `Complete required listing fields before publishing: ${missing.join(", ")}.` });
     }
-    const id = `event-${crypto.randomUUID()}`;
+    const id = eventId || `event-${crypto.randomUUID()}`;
     const event = {
       id,
       title,
@@ -2622,14 +2630,20 @@ app.post("/api/events", async (req, res, next) => {
       included,
       whoIsInvited,
       hostNote,
-      videoUrl,
+      videoUrl: videoUrlList[0] || "",
+      videoUrlList,
       imageData,
       imageDataList,
       status,
     };
     if (!sql) demo.events.unshift(event);
     else
-      await sql`INSERT INTO events (id, title, brand, venue, date, end_date, time, end_time, gates_open_time, area, capacity, confirmed, ticket_price, ticket_currency, ticket_url, reservation_phone, creator_pass_note, age_restriction, hashtag, application_deadline, action_label, category, tracks, dress_code, about, included, who_is_invited, host_note, image_data, image_gallery, video_url, track_capacities, influencer_deliverables, map_url, status) VALUES (${id}, ${title}, ${brand}, ${venue}, ${date || null}, ${endDate || null}, ${time}, ${endTime}, ${gatesOpenTime}, ${area}, ${capacity}, 0, ${ticketPrice}, ${ticketCurrency}, ${ticketUrl}, ${reservationPhone}, ${creatorPassNote}, ${ageRestriction}, ${hashtag}, ${applicationDeadline || null}, ${actionLabel}, ${category}, ${tracks}, ${dressCode}, ${about}, ${included}, ${whoIsInvited}, ${hostNote}, ${imageData}, ${imageDataList}, ${videoUrl}, ${JSON.stringify(trackCapacities)}::jsonb, ${influencerDeliverables}, ${mapUrl}, ${status})`;
+      await sql`INSERT INTO events (id, title, brand, venue, date, end_date, time, end_time, gates_open_time, area, capacity, confirmed, ticket_price, ticket_currency, ticket_url, reservation_phone, creator_pass_note, age_restriction, hashtag, application_deadline, action_label, category, tracks, dress_code, about, included, who_is_invited, host_note, image_data, image_gallery, video_url, video_gallery, track_capacities, influencer_deliverables, map_url, status) VALUES (${id}, ${title}, ${brand}, ${venue}, ${date || null}, ${endDate || null}, ${time}, ${endTime}, ${gatesOpenTime}, ${area}, ${capacity}, 0, ${ticketPrice}, ${ticketCurrency}, ${ticketUrl}, ${reservationPhone}, ${creatorPassNote}, ${ageRestriction}, ${hashtag}, ${applicationDeadline || null}, ${actionLabel}, ${category}, ${tracks}, ${dressCode}, ${about}, ${included}, ${whoIsInvited}, ${hostNote}, ${imageData}, ${imageDataList}, ${videoUrlList[0] || ""}, ${videoUrlList}, ${JSON.stringify(trackCapacities)}::jsonb, ${influencerDeliverables}, ${mapUrl}, ${status})`;
+    if (s3 && mediaBucket) {
+      try {
+        await s3.send(new PutObjectCommand({ Bucket: mediaBucket, Key: `media/events/${id}/`, Body: new Uint8Array(), ContentLength: 0, ContentType: "application/x-directory" }));
+      } catch (error) { console.warn(`Could not create S3 event prefix for ${id}:`, error); }
+    }
     if (status === "published") {
       const form = await ensureCreatorPassGoogleForm(event);
       Object.assign(event, { creatorPassFormUrl: form.url, creatorPassFormError: form.error });
@@ -2726,6 +2740,7 @@ app.patch("/api/events/:id", async (req, res, next) => {
       const whoIsInvited = text(req.body.whoIsInvited, 1500);
       const hostNote = text(req.body.hostNote, 1500);
       const videoUrl = text(req.body.videoUrl, 1000);
+      const videoUrlList = Array.isArray(req.body.videoUrlList) ? req.body.videoUrlList.map((value) => String(value || "")) : videoUrl ? [videoUrl] : [];
       const imageDataList = Array.isArray(req.body.imageDataList) ? req.body.imageDataList.map((image) => String(image || "")) : [];
       const imageData = imageDataList[0] || "";
       const status = String(req.body.status || "draft");
@@ -2738,15 +2753,15 @@ app.patch("/api/events/:id", async (req, res, next) => {
       if (ticketUrl && !/^https:\/\//i.test(ticketUrl)) return res.status(400).json({ error: "Use a secure HTTPS ticket link." });
       if (mapUrl && !/^https:\/\//i.test(mapUrl)) return res.status(400).json({ error: "Use a secure HTTPS map link." });
       if (!["draft", "published", "pending", "closed"].includes(status)) return res.status(400).json({ error: "Invalid event status." });
-      if (imageDataList.length > 5 || imageDataList.some((image) => !/^https:\/\//.test(image) || (mediaBaseUrl && !image.startsWith(`${mediaBaseUrl}/media/`)))) return res.status(400).json({ error: "Choose up to 5 HTTPS event images from the configured media storage." });
-      if (videoUrl && (!mediaBaseUrl || !videoUrl.startsWith(`${mediaBaseUrl}/media/`))) return res.status(400).json({ error: "The event video must be uploaded to configured media storage." });
+      if (imageDataList.some((image) => !/^https:\/\//.test(image) || (mediaBaseUrl && !image.startsWith(`${mediaBaseUrl}/media/`)))) return res.status(400).json({ error: "Choose HTTPS event images from the configured media storage." });
+      if (videoUrlList.some((url) => !mediaBaseUrl || !url.startsWith(`${mediaBaseUrl}/media/`))) return res.status(400).json({ error: "All event videos must be uploaded to configured media storage." });
       if (!sql) {
         const event = demo.events.find((row) => row.id === id);
         if (!event) return res.status(404).json({ error: "Event not found." });
-        Object.assign(event, { title, brand, venue, area, date, endDate, time, endTime, gatesOpenTime, ticketUrl, reservationPhone, creatorPassNote, ageRestriction, hashtag, applicationDeadline, actionLabel, capacity, ticketPrice, ticketCurrency, category, tracks, trackCapacities, influencerDeliverables, mapUrl, dressCode, about, included, whoIsInvited, hostNote, videoUrl, imageData, imageDataList, status });
+        Object.assign(event, { title, brand, venue, area, date, endDate, time, endTime, gatesOpenTime, ticketUrl, reservationPhone, creatorPassNote, ageRestriction, hashtag, applicationDeadline, actionLabel, capacity, ticketPrice, ticketCurrency, category, tracks, trackCapacities, influencerDeliverables, mapUrl, dressCode, about, included, whoIsInvited, hostNote, videoUrl: videoUrlList[0] || "", videoUrlList, imageData, imageDataList, status });
         return res.json(event);
       }
-      const rows = await sql`UPDATE events SET title = ${title}, brand = ${brand}, venue = ${venue}, area = ${area}, date = ${date || null}, end_date = ${endDate || null}, time = ${time}, end_time = ${endTime}, gates_open_time = ${gatesOpenTime}, ticket_url = ${ticketUrl}, reservation_phone = ${reservationPhone}, creator_pass_note = ${creatorPassNote}, age_restriction = ${ageRestriction}, hashtag = ${hashtag}, application_deadline = ${applicationDeadline || null}, action_label = ${actionLabel}, capacity = ${capacity}, ticket_price = ${ticketPrice}, ticket_currency = ${ticketCurrency}, category = ${category}, tracks = ${tracks}, track_capacities = ${JSON.stringify(trackCapacities)}::jsonb, influencer_deliverables = ${influencerDeliverables}, map_url = ${mapUrl}, dress_code = ${dressCode}, about = ${about}, included = ${included}, who_is_invited = ${whoIsInvited}, host_note = ${hostNote}, video_url = ${videoUrl}, image_data = ${imageData}, image_gallery = ${imageDataList}, status = ${status}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+      const rows = await sql`UPDATE events SET title = ${title}, brand = ${brand}, venue = ${venue}, area = ${area}, date = ${date || null}, end_date = ${endDate || null}, time = ${time}, end_time = ${endTime}, gates_open_time = ${gatesOpenTime}, ticket_url = ${ticketUrl}, reservation_phone = ${reservationPhone}, creator_pass_note = ${creatorPassNote}, age_restriction = ${ageRestriction}, hashtag = ${hashtag}, application_deadline = ${applicationDeadline || null}, action_label = ${actionLabel}, capacity = ${capacity}, ticket_price = ${ticketPrice}, ticket_currency = ${ticketCurrency}, category = ${category}, tracks = ${tracks}, track_capacities = ${JSON.stringify(trackCapacities)}::jsonb, influencer_deliverables = ${influencerDeliverables}, map_url = ${mapUrl}, dress_code = ${dressCode}, about = ${about}, included = ${included}, who_is_invited = ${whoIsInvited}, host_note = ${hostNote}, video_url = ${videoUrlList[0] || ""}, video_gallery = ${videoUrlList}, image_data = ${imageData}, image_gallery = ${imageDataList}, status = ${status}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
       if (!rows[0]) return res.status(404).json({ error: "Event not found." });
       if (status === "published" && !rows[0].creator_pass_form_url) {
         await ensureCreatorPassGoogleForm({ ...rows[0], id, title, brand, venue, area, date, hashtag, creatorPassNote, imageData, imageDataList, status });

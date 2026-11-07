@@ -88,7 +88,7 @@ export const api = {
   decideApplication: (id, status) => request(`/applications/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   createEvent: (event) => request('/events', { method: 'POST', body: JSON.stringify(event) }),
   updateEventDetails: (id, event) => request(`/events/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(event) }),
-  mediaUploadUrl: (file, options = {}) => request('/media/upload-url', { method: 'POST', body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size, purpose: options.venueImage ? 'venue-image' : options.siteGallery ? 'site-gallery' : 'event' }) }),
+  mediaUploadUrl: (file, options = {}) => request('/media/upload-url', { method: 'POST', body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size, eventId: options.eventId || '', purpose: options.venueImage ? 'venue-image' : options.siteGallery ? 'site-gallery' : 'event' }) }),
   uploadMedia,
   createSiteMedia: (item) => request('/site-media', { method: 'POST', body: JSON.stringify(item) }),
   updateSiteMedia: (id, item) => request(`/site-media/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(item) }),
