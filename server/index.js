@@ -1664,7 +1664,8 @@ app.post("/api/media/upload-url", async (req, res, next) => {
     const contentType = text(req.body.contentType, 100).toLowerCase();
     const size = Number(req.body.size);
     const eventId = req.body.purpose === "event" ? text(req.body.eventId, 100) : "";
-    if (req.body.eventId && !/^event-[a-zA-Z0-9-]{1,90}$/.test(eventId)) return res.status(400).json({ error: "Invalid event media folder." });
+    // Existing imported events can have client-* IDs; restrict to one safe S3 path segment.
+    if (req.body.eventId && !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(eventId)) return res.status(400).json({ error: "Invalid event media folder." });
     const siteGalleryVideo = req.body.purpose === "site-gallery" && contentType.startsWith("video/");
     const siteGalleryCaptions = req.body.purpose === "site-gallery" && contentType === "text/vtt";
     const venueImage = req.body.purpose === "venue-image" && contentType.startsWith("image/");
