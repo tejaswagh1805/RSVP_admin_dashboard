@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS events (
   video_url TEXT NOT NULL DEFAULT '',
   video_gallery TEXT[] NOT NULL DEFAULT '{}',
   latest_event BOOLEAN NOT NULL DEFAULT TRUE,
+  scheduled_publish_at TIMESTAMPTZ,
   top_pick BOOLEAN NOT NULL DEFAULT FALSE,
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'pending', 'published', 'closed')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -156,6 +157,7 @@ CREATE TABLE IF NOT EXISTS event_rsvp_requests (
   member_email TEXT NOT NULL,
   track TEXT NOT NULL,
   guest_names TEXT[] NOT NULL DEFAULT '{}',
+  referral_code TEXT NOT NULL DEFAULT '',
   deliverables_agreed BOOLEAN NOT NULL DEFAULT FALSE,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'waitlisted', 'declined')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -167,6 +169,7 @@ CREATE TABLE IF NOT EXISTS event_rsvp_requests (
 
 CREATE INDEX IF NOT EXISTS event_rsvp_requests_event_status_idx ON event_rsvp_requests(event_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS event_rsvp_requests_member_idx ON event_rsvp_requests(member_id, created_at DESC);
+ALTER TABLE event_rsvp_requests ADD COLUMN IF NOT EXISTS referral_code TEXT NOT NULL DEFAULT '';
 
 
 CREATE TABLE IF NOT EXISTS wall_posts (
@@ -374,6 +377,7 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS video_url TEXT NOT NULL DEFAULT '';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS video_gallery TEXT[] NOT NULL DEFAULT '{}';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS top_pick BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS latest_event BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS scheduled_publish_at TIMESTAMPTZ;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE events ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE events DROP CONSTRAINT IF EXISTS events_status_check;

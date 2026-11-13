@@ -171,7 +171,7 @@ export async function sendMemberActivationEmail({ name, email, activationUrl }) 
   }
 }
 
-export async function sendRsvpDecisionEmail({ name, email, event, track, guestNames = [], deliverables = "", status }) {
+export async function sendRsvpDecisionEmail({ name, email, event, track, guestNames = [], deliverables = "", status, customMessage = "", personalLine = "" }) {
   if (!email) return { status: "skipped", message: "No email address is on this RSVP." };
   const region = String(process.env.SES_REGION || process.env.AWS_REGION || "").trim();
   const from = String(process.env.SES_FROM_EMAIL || "").trim() || "RSVP DXB <vinitahirani@rsvpdxb.com>";
@@ -199,6 +199,8 @@ export async function sendRsvpDecisionEmail({ name, email, event, track, guestNa
   }
   const safeName = htmlEscape(name || "there");
   const safeTitle = htmlEscape(title);
+  if (String(customMessage).trim()) message = String(customMessage).slice(0, 10000);
+  else if (String(personalLine).trim()) message += `\n\n${String(personalLine).slice(0, 2000)}`;
   const safeMessage = htmlEscape(message).replaceAll("\n", "<br />");
   const html = `<!doctype html><html><body style="margin:0;background:#f3e3cb;color:#2e1c10;font-family:Arial,sans-serif"><main style="max-width:560px;margin:32px auto;padding:36px 28px;background:#fbf3e7;border:1px solid #d2b995;border-radius:12px"><p style="color:#86501f;font-size:12px;letter-spacing:2px;text-transform:uppercase">RSVP DXB</p><h1 style="font-size:28px;font-weight:500">${safeTitle}</h1><p>Hello ${safeName},</p><p style="line-height:1.7">${safeMessage}</p><p style="font-size:12px;color:#705238">Warm regards,<br />The RSVP DXB team</p></main></body></html>`;
   try {

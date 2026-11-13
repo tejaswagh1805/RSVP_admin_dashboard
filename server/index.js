@@ -1,4 +1,4 @@
-import "dotenv/config";
+﻿import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { neon } from "@neondatabase/serverless";
@@ -189,8 +189,8 @@ const demo = {
       email: "layla@thegulfedit.com",
       track: "Media",
       city: "Dubai",
-      detail: "Senior editor, The Gulf Edit — food & travel",
-      followers: "—",
+      detail: "Senior editor, The Gulf Edit â€” food & travel",
+      followers: "â€”",
       submitted: "2026-09-29",
       status: "pending",
     },
@@ -222,7 +222,7 @@ const demo = {
       email: "office@alsuwaidi-group.ae",
       track: "Private Circle",
       city: "Abu Dhabi",
-      detail: "Referred by member #0142 — assistant contact on file",
+      detail: "Referred by member #0142 â€” assistant contact on file",
       followers: "Private",
       submitted: "2026-09-27",
       status: "pending",
@@ -233,7 +233,7 @@ const demo = {
       email: "sofia@luxereport.co",
       track: "Creators",
       city: "Dubai",
-      detail: "Beauty creator — YouTube + IG",
+      detail: "Beauty creator â€” YouTube + IG",
       followers: "41k",
       submitted: "2026-09-26",
       status: "pending",
@@ -396,7 +396,7 @@ const demo = {
       id: "w2",
       brand: "Maison Dalia",
       type: "New Event",
-      body: "Spring Collection Launch — Alserkal Avenue, 4 October. Creators and fashion press only.",
+      body: "Spring Collection Launch â€” Alserkal Avenue, 4 October. Creators and fashion press only.",
       posted: "5h ago",
       boosted: false,
       status: "live",
@@ -424,7 +424,7 @@ const demo = {
       id: "w5",
       brand: "Gallery Seventeen",
       type: "Sponsored",
-      body: "Collectors Night at DIFC — a curator-led evening with the artists present.",
+      body: "Collectors Night at DIFC â€” a curator-led evening with the artists present.",
       posted: "Pending review",
       boosted: false,
       status: "pending",
@@ -539,7 +539,7 @@ const selectFor = {
   members:
     'SELECT id, member_number AS "memberNumber", name, email, track, source_track AS "sourceTrack", rank, points, events, city, profile_url AS "profileUrl", handle, platform, followers, mobile, outlet, member_role AS role, all_profiles AS "allProfiles", status, joined::text AS joined FROM members ORDER BY name',
   events:
-    'SELECT id, title, brand, venue, date::text AS \"date\", end_date::text AS \"endDate\", time, end_time AS \"endTime\", gates_open_time AS \"gatesOpenTime\", area, category, tracks, capacity, confirmed, ticket_price AS \"ticketPrice\", ticket_currency AS \"ticketCurrency\", ticket_url AS \"ticketUrl\", reservation_phone AS \"reservationPhone\", creator_pass_note AS \"creatorPassNote\", creator_pass_form_url AS \"creatorPassFormUrl\", creator_pass_form_error AS \"creatorPassFormError\", age_restriction AS \"ageRestriction\", hashtag, application_deadline::text AS \"applicationDeadline\", action_label AS \"actionLabel\", dress_code AS \"dressCode\", about, included, who_is_invited AS \"whoIsInvited\", host_note AS \"hostNote\", COALESCE(image_gallery[1], image_data) AS \"imageData\", image_gallery AS \"imageGallery\", video_url AS \"videoUrl\", video_gallery AS \"videoUrlList\", track_capacities AS \"trackCapacities\", influencer_deliverables AS \"influencerDeliverables\", map_url AS \"mapUrl\", latest_event AS \"latestEvent\", top_pick AS \"topPick\", (SELECT COUNT(*)::int FROM event_rsvp_requests r WHERE r.event_id = events.id AND r.status = \'pending\') AS \"pendingRsvpCount\", status FROM events ORDER BY date',
+    'SELECT id, title, brand, venue, date::text AS \"date\", end_date::text AS \"endDate\", time, end_time AS \"endTime\", gates_open_time AS \"gatesOpenTime\", area, category, tracks, capacity, confirmed, ticket_price AS \"ticketPrice\", ticket_currency AS \"ticketCurrency\", ticket_url AS \"ticketUrl\", reservation_phone AS \"reservationPhone\", creator_pass_note AS \"creatorPassNote\", creator_pass_form_url AS \"creatorPassFormUrl\", creator_pass_form_error AS \"creatorPassFormError\", age_restriction AS \"ageRestriction\", hashtag, application_deadline::text AS \"applicationDeadline\", action_label AS \"actionLabel\", dress_code AS \"dressCode\", about, included, who_is_invited AS \"whoIsInvited\", host_note AS \"hostNote\", COALESCE(image_gallery[1], image_data) AS \"imageData\", image_gallery AS \"imageGallery\", video_url AS \"videoUrl\", video_gallery AS \"videoUrlList\", track_capacities AS \"trackCapacities\", influencer_deliverables AS \"influencerDeliverables\", map_url AS \"mapUrl\", latest_event AS \"latestEvent\", top_pick AS \"topPick\", scheduled_publish_at AS \"scheduledPublishAt\", (SELECT COUNT(*)::int FROM event_rsvp_requests r WHERE r.event_id = events.id AND r.status = \'pending\') AS \"pendingRsvpCount\", status FROM events ORDER BY date',
   wall_posts:
     'SELECT id, brand, type, body, posted, boosted, status, event_id AS "eventId" FROM wall_posts ORDER BY created_at DESC',
   site_media:
@@ -602,7 +602,7 @@ async function sendInfobipWhatsApp(to, textMessage, events = []) {
             sections: [{ rows: events.slice(0, 10).map((event) => ({
               id: event.id,
               title: event.title.slice(0, 24),
-              description: `${event.date} · ${event.ticketPrice} ${event.ticketCurrency}`.slice(0, 72),
+              description: `${event.date} Â· ${event.ticketPrice} ${event.ticketCurrency}`.slice(0, 72),
             })) }],
           },
         },
@@ -644,7 +644,7 @@ async function sendInfobipWhatsAppPayment(to, checkoutUrl, event, guestName, amo
 
   const details = [
     `Event: ${event.title}`,
-    `Date: ${event.date}${event.time ? ` · ${event.time}` : ""}`,
+    `Date: ${event.date}${event.time ? ` Â· ${event.time}` : ""}`,
     event.venue ? `Venue: ${event.venue}` : "",
     guestName ? `Guest: ${guestName}` : "",
     `Total: ${Number(amount).toFixed(2)} ${currency}`,
@@ -662,7 +662,7 @@ async function sendInfobipWhatsAppPayment(to, checkoutUrl, event, guestName, amo
       content: {
         header: eventImage
           ? { type: "IMAGE", mediaUrl: eventImage }
-          : { type: "TEXT", text: "RSVP DXB · Ticket checkout" },
+          : { type: "TEXT", text: "RSVP DXB Â· Ticket checkout" },
         body: { text: details },
         footer: { text: "Secure checkout powered by Stripe" },
         action: { displayText: "Pay now", url: checkoutUrl },
@@ -703,7 +703,7 @@ async function createStripeCheckout({ requestId, event, amount, currency }) {
     "line_items[0][price_data][currency]": String(currency).toLowerCase(),
     "line_items[0][price_data][unit_amount]": String(cents),
     "line_items[0][price_data][product_data][name]": `RSVP DXB ticket: ${event.title}`,
-    "line_items[0][price_data][product_data][description]": `${event.date}${event.venue ? ` · ${event.venue}` : ""}`,
+    "line_items[0][price_data][product_data][description]": `${event.date}${event.venue ? ` Â· ${event.venue}` : ""}`,
   });
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
@@ -899,7 +899,7 @@ app.post("/api/whatsapp/infobip/webhook", async (req, res, next) => {
       }
       await sql`INSERT INTO ticket_requests (id, event_id, phone, guest_name, amount, currency) VALUES (${id}, ${event.id}, ${phone}, ${text(item.contact?.name, 120)}, ${amount}, ${currency}) ON CONFLICT (id) DO NOTHING`;
       const priceNote = amount > 0
-        ? ` If approved, we’ll send a secure ${amount.toFixed(2)} ${currency} payment link here. Your ticket is delivered after payment.`
+        ? ` If approved, weâ€™ll send a secure ${amount.toFixed(2)} ${currency} payment link here. Your ticket is delivered after payment.`
         : " If approved, your ticket will be sent here.";
       await sendInfobipWhatsApp(phone, `Your ticket request for ${event.title} has been received. The RSVP DXB team will review it.${priceNote}`);
     }
@@ -1330,11 +1330,14 @@ app.get("/api/newsletter", async (_req, res, next) => {
 app.post("/api/newsletter/campaigns", async (req, res, next) => {
   try {
     if (!sql) return res.status(503).json({ error: "Newsletter campaigns require the connected production database." });
-    if (req.body.confirmSend !== true) return res.status(400).json({ error: "Confirm that this campaign should be emailed to all active subscribers." });
+    if (req.body.confirmSend !== true && req.body.testOnly !== true) return res.status(400).json({ error: "Confirm that this campaign should be emailed to opted-in subscribers." });
     const subject = text(req.body.subject, 140);
     const body = String(req.body.body || "").trim().slice(0, 10000);
     const imageUrl = String(req.body.imageUrl || "").trim();
     const eventId = text(req.body.eventId, 200);
+    const segment = text(req.body.segment, 32).toLowerCase() || "all";
+    const segmentTrack = { media: "Media", influencer: "Creators", hni: "Private Circle" }[segment] || "";
+    if (!["all", "media", "influencer", "hni"].includes(segment)) return res.status(400).json({ error: "Choose all members, Media, Influencers, or HNI." });
     if (subject.length < 4) return res.status(400).json({ error: "Enter a subject with at least 4 characters." });
     if (body.length < 20) return res.status(400).json({ error: "Enter a message with at least 20 characters." });
     if (imageUrl) {
@@ -1350,14 +1353,47 @@ app.post("/api/newsletter/campaigns", async (req, res, next) => {
       event = (await sql`SELECT id, title, date::text AS date, time, venue FROM events WHERE id = ${eventId} AND status = 'published' LIMIT 1`)[0] || null;
       if (!event) return res.status(400).json({ error: "Choose a currently published event for this campaign." });
     }
-    const recipients = await sql`SELECT email, unsubscribe_token AS "unsubscribeToken" FROM newsletter_subscribers WHERE active = TRUE AND consented_at IS NOT NULL AND unsubscribe_token IS NOT NULL ORDER BY email`;
+    if (req.body.testOnly === true) {
+      const siteUrl = String(process.env.NEWSLETTER_PUBLIC_SITE_URL || "https://www.rsvpdxb.com").replace(/\/$/, "");
+      await sendNewsletterCampaignEmail({
+        email: req.admin.email,
+        subject: `[TEST] ${subject}`,
+        body,
+        imageUrl,
+        eventUrl: event ? `${siteUrl}/events/${encodeURIComponent(event.id)}` : "",
+        eventTitle: event?.title || "",
+        eventDate: event?.date || "",
+        eventTime: event?.time || "",
+        eventVenue: event?.venue || "",
+        unsubscribeUrl: `${siteUrl}/unsubscribe`,
+      });
+      return res.json({ testSent: true, recipient: req.admin.email });
+    }
+    const recipients = await sql`
+      SELECT s.email, s.unsubscribe_token AS "unsubscribeToken"
+      FROM newsletter_subscribers s
+      WHERE s.active = TRUE AND s.consented_at IS NOT NULL AND s.unsubscribe_token IS NOT NULL
+        AND (${segment} = 'all' OR EXISTS (
+          SELECT 1 FROM members m
+          WHERE lower(m.email) = lower(s.email) AND m.status = 'approved' AND m.track = ${segmentTrack}
+        ))
+      ORDER BY s.email
+    `;
     if (!recipients.length) return res.status(400).json({ error: "There are no opted-in subscribers to send to." });
 
     const campaignId = `newsletter-${randomBytes(16).toString("hex")}`;
     const siteUrl = String(process.env.NEWSLETTER_PUBLIC_SITE_URL || "https://www.rsvpdxb.com").replace(/\/$/, "");
     const eventUrl = event ? `${siteUrl}/events/${encodeURIComponent(event.id)}` : "";
     await sql`INSERT INTO newsletter_campaigns (id, subject, body, image_url, event_id, event_title, status, recipient_count, created_by) VALUES (${campaignId}, ${subject}, ${body}, ${imageUrl}, ${event?.id || ""}, ${event?.title || ""}, 'queued', ${recipients.length}, ${req.admin.email})`;
-    await sql`INSERT INTO newsletter_campaign_deliveries (campaign_id, email) SELECT ${campaignId}, email FROM newsletter_subscribers WHERE active = TRUE AND consented_at IS NOT NULL AND unsubscribe_token IS NOT NULL`;
+    await sql`
+      INSERT INTO newsletter_campaign_deliveries (campaign_id, email)
+      SELECT ${campaignId}, s.email FROM newsletter_subscribers s
+      WHERE s.active = TRUE AND s.consented_at IS NOT NULL AND s.unsubscribe_token IS NOT NULL
+        AND (${segment} = 'all' OR EXISTS (
+          SELECT 1 FROM members m
+          WHERE lower(m.email) = lower(s.email) AND m.status = 'approved' AND m.track = ${segmentTrack}
+        ))
+    `;
     await sql`UPDATE newsletter_campaigns SET status = 'sending' WHERE id = ${campaignId}`;
 
     let cursor = 0;
@@ -1574,11 +1610,12 @@ app.post("/api/mobile/rsvps", async (req, res, next) => {
       return res.status(400).json({ error: "Please review and agree to the creator deliverables before submitting." });
     }
     const normalizedGuests = guestNames.map((name) => name.trim());
+    const referralCode = text(req.body.referralCode, 100).replace(/[^a-zA-Z0-9_-]/g, "");
     const inserted = await sql`
-      INSERT INTO event_rsvp_requests (id, event_id, member_id, member_email, track, guest_names, deliverables_agreed, status)
-      VALUES (${`rsvp-${randomBytes(16).toString("hex")}`}, ${event.id}, ${member.id}, ${member.email}, ${member.track}, ${normalizedGuests}, ${member.track === "Creators" ? deliverablesAgreed : false}, 'pending')
+      INSERT INTO event_rsvp_requests (id, event_id, member_id, member_email, track, guest_names, deliverables_agreed, referral_code, status)
+      VALUES (${`rsvp-${randomBytes(16).toString("hex")}`}, ${event.id}, ${member.id}, ${member.email}, ${member.track}, ${normalizedGuests}, ${member.track === "Creators" ? deliverablesAgreed : false}, ${referralCode}, 'pending')
       ON CONFLICT (event_id, member_id) DO UPDATE SET guest_names = EXCLUDED.guest_names,
-        deliverables_agreed = EXCLUDED.deliverables_agreed, status = 'pending',
+        deliverables_agreed = EXCLUDED.deliverables_agreed, referral_code = EXCLUDED.referral_code, status = 'pending',
         reviewed_at = NULL, reviewed_by = NULL, created_at = NOW(), updated_at = NOW()
       WHERE event_rsvp_requests.status = 'declined'
       RETURNING status
@@ -2022,6 +2059,7 @@ app.get("/api/event-rsvp-requests", async (req, res, next) => {
         COALESCE(m.handle, '') AS handle, COALESCE(m.followers, 0)::int AS followers,
         COALESCE(m.mobile, '') AS phone, COALESCE(m.outlet, '') AS publication,
         r.guest_names AS "guestNames", r.deliverables_agreed AS "deliverablesAgreed",
+        r.referral_code AS "referralCode",
         r.status, r.created_at AS "createdAt", r.reviewed_at AS "reviewedAt",
         r.reviewed_by AS "reviewedBy"
       FROM event_rsvp_requests r
@@ -2106,6 +2144,71 @@ app.patch("/api/event-ticket-inquiries/:id", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+async function promoteEligibleWaitlisted(eventId, excludeRequestId) {
+  const promoted = [];
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const entryCode = `RSVP-${randomBytes(5).toString("hex").toUpperCase()}`;
+    const rows = await sql`
+      WITH candidate AS (
+        SELECT r.id, r.event_id AS "eventId", r.member_id AS "memberId", r.member_email AS email,
+          r.track, r.guest_names AS "guestNames", cardinality(r.guest_names) + 1 AS "partySize",
+          m.name, e.title AS "eventTitle", e.date::text AS date, e.time, e.end_time AS "endTime",
+          e.gates_open_time AS "gatesOpenTime", e.venue, e.area,
+          e.influencer_deliverables AS deliverables
+        FROM event_rsvp_requests r
+        JOIN events e ON e.id = r.event_id
+        JOIN members m ON m.id = r.member_id
+        WHERE r.event_id = ${eventId} AND r.status = 'waitlisted' AND r.id <> ${excludeRequestId}
+          AND e.confirmed + cardinality(r.guest_names) + 1 <= e.capacity
+          AND COALESCE((SELECT SUM(cardinality(a.guest_names) + 1)
+            FROM event_rsvp_requests a
+            WHERE a.event_id = r.event_id AND a.track = r.track AND a.status = 'accepted'), 0)
+            + cardinality(r.guest_names) + 1 <= COALESCE((e.track_capacities ->> r.track)::integer, e.capacity)
+        ORDER BY r.created_at, r.id
+        LIMIT 1
+        FOR UPDATE OF r SKIP LOCKED
+      ), capacity AS (
+        UPDATE events e SET confirmed = e.confirmed + c."partySize", updated_at = NOW()
+        FROM candidate c
+        WHERE e.id = c."eventId"
+          AND e.confirmed + c."partySize" <= e.capacity
+          AND COALESCE((SELECT SUM(cardinality(a.guest_names) + 1)
+            FROM event_rsvp_requests a
+            WHERE a.event_id = e.id AND a.track = c.track AND a.status = 'accepted'), 0)
+            + c."partySize" <= COALESCE((e.track_capacities ->> c.track)::integer, e.capacity)
+        RETURNING e.id
+      ), accepted AS (
+        UPDATE event_rsvp_requests r SET status = 'accepted', reviewed_at = NOW(),
+          reviewed_by = 'automatic waitlist promotion', updated_at = NOW()
+        FROM candidate c, capacity e
+        WHERE r.id = c.id AND e.id = c."eventId"
+        RETURNING r.id
+      ), guest AS (
+        INSERT INTO guests (id, name, track, event_id, plus_ones, code, status)
+        SELECT 'rsvp-' || c.id, c.name, c.track, c."eventId", cardinality(c."guestNames"), ${entryCode}, 'confirmed'
+        FROM candidate c JOIN accepted a ON a.id = c.id
+        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, track = EXCLUDED.track,
+          event_id = EXCLUDED.event_id, plus_ones = EXCLUDED.plus_ones, code = EXCLUDED.code, status = 'confirmed'
+        RETURNING id
+      )
+      SELECT c.* FROM candidate c JOIN accepted a ON a.id = c.id JOIN guest g ON g.id = 'rsvp-' || c.id
+    `;
+    if (!rows[0]) break;
+    const request = rows[0];
+    promoted.push(request.name);
+    await sendRsvpDecisionEmail({
+      name: request.name,
+      email: request.email,
+      event: { title: request.eventTitle, date: request.date, time: [request.time, request.endTime ? `until ${request.endTime}` : "", request.gatesOpenTime ? `gates open ${request.gatesOpenTime}` : ""].filter(Boolean).join(" Â· "), venue: request.venue, area: request.area },
+      track: request.track,
+      guestNames: request.guestNames || [],
+      deliverables: request.deliverables || "",
+      status: "accepted",
+    });
+  }
+  return promoted;
+}
+
 app.patch("/api/event-rsvp-requests/:id", async (req, res, next) => {
   try {
     const status = String(req.body.status || "");
@@ -2160,6 +2263,7 @@ app.patch("/api/event-rsvp-requests/:id", async (req, res, next) => {
         WHERE r.id = t.id AND a.id = t.event_id
         RETURNING r.id, r.event_id AS "eventId", r.member_id AS "memberId",
           r.member_email AS email, r.track, r.guest_names AS "guestNames", r.status,
+          t.current_status AS "previousStatus",
           t.name, t.title AS "eventTitle", t.date, t.time, t.end_time AS "endTime", t.gates_open_time AS "gatesOpenTime", t.venue, t.area,
           t.influencer_deliverables AS deliverables
       ), synced_guest AS (
@@ -2186,13 +2290,16 @@ app.patch("/api/event-rsvp-requests/:id", async (req, res, next) => {
     const delivery = await sendRsvpDecisionEmail({
       name: request.name,
       email: request.email,
-      event: { title: request.eventTitle, date: request.date, time: [request.time, request.endTime ? `until ${request.endTime}` : "", request.gatesOpenTime ? `gates open ${request.gatesOpenTime}` : ""].filter(Boolean).join(" · "), venue: request.venue, area: request.area },
+      event: { title: request.eventTitle, date: request.date, time: [request.time, request.endTime ? `until ${request.endTime}` : "", request.gatesOpenTime ? `gates open ${request.gatesOpenTime}` : ""].filter(Boolean).join(" Â· "), venue: request.venue, area: request.area },
       track: request.track,
       guestNames: request.guestNames || [],
       deliverables: request.deliverables || "",
       status,
+      customMessage: text(req.body.message, 10000),
+      personalLine: text(req.body.personalLine, 2000),
     });
-    res.json({ request, delivery });
+    const promoted = request.previousStatus === "accepted" && request.status !== "accepted" ? await promoteEligibleWaitlisted(request.eventId, request.id) : [];
+    res.json({ request, delivery, promoted });
   } catch (error) { next(error); }
 });
 
@@ -2594,7 +2701,14 @@ app.post("/api/events", async (req, res, next) => {
       return res.status(400).json({ error: tracks.length ? "Enter a guest capacity above zero." : "Capacity cannot be negative." });
     if (status === "published") {
       const missing = [
+        !title && "event name",
+        !text(req.body.category, 80).trim() && "event tags",
+        !(date && time && endTime && gatesOpenTime) && "date, gates-open, start and end times",
+        !(capacity > 0) && "attendee capacity",
+        (!tracks.length || tracks.some((track) => !(Number(trackCapacities[track]) > 0))) && "at least one track with spots",
         !imageData && "cover image",
+        !(venue.trim() && mapUrl.trim()) && "venue and Google Maps link",
+        (tracks.includes("Creators") && !influencerDeliverables.trim()) && "creator deliverables",
       ].filter(Boolean);
       if (missing.length) return res.status(400).json({ error: `Complete required listing fields before publishing: ${missing.join(", ")}.` });
     }
@@ -2654,6 +2768,33 @@ app.post("/api/events", async (req, res, next) => {
     next(error);
   }
 });
+app.post("/api/events/:id/schedule", async (req, res, next) => {
+  try {
+    const eventId = text(req.params.id, 180);
+    const scheduledAt = String(req.body.scheduledAt || "");
+    const time = new Date(scheduledAt);
+    if (!Number.isFinite(time.getTime()) || time.getTime() <= Date.now()) return res.status(400).json({ error: "Choose a future date and time to publish." });
+    if (!sql) {
+      const event = demo.events.find((row) => row.id === eventId);
+      if (!event) return res.status(404).json({ error: "Event not found." });
+      event.status = "pending";
+      event.scheduledPublishAt = time.toISOString();
+      return res.json({ id: event.id, status: event.status, scheduledPublishAt: event.scheduledPublishAt });
+    }
+    const event = (await sql`SELECT id, title, category, date, time, end_time, gates_open_time, capacity, tracks, track_capacities, image_data, image_gallery, venue, map_url, influencer_deliverables, status, scheduled_publish_at AS "scheduledPublishAt" FROM events WHERE id = ${eventId} LIMIT 1`)[0];
+    if (!event) return res.status(404).json({ error: "Event not found." });
+    // Existing published listings may predate the current required-field rules.
+    // They are already customer-visible, so allow an admin to schedule them again.
+    // Draft and pending listings still need to meet the current publication requirements.
+    if (req.body.allowIncomplete !== true && event.status !== "published" && !event.scheduledPublishAt) {
+      const missing = [!event.title && "event name", !event.category && "event tags", !(event.date && event.time && event.end_time && event.gates_open_time) && "date and all event times", !(Number(event.capacity) > 0) && "attendee capacity", (!event.tracks?.length || event.tracks.some((track) => !(Number(event.track_capacities?.[track]) > 0))) && "at least one track with spots", !event.image_data && !event.image_gallery?.length && "cover image", !(event.venue?.trim() && event.map_url?.trim()) && "venue and Google Maps link", (event.tracks?.includes("Creators") && !event.influencer_deliverables?.trim()) && "creator deliverables"].filter(Boolean);
+      if (missing.length) return res.status(400).json({ error: `Complete required listing fields before scheduling: ${missing.join(", ")}.` });
+    }
+    const rows = await sql`UPDATE events SET status = 'pending', scheduled_publish_at = ${time.toISOString()}, updated_at = NOW() WHERE id = ${eventId} RETURNING id, status, scheduled_publish_at AS "scheduledPublishAt"`;
+    res.json(rows[0]);
+  } catch (error) { next(error); }
+});
+
 app.post("/api/events/:id/creator-pass-form", async (req, res, next) => {
   try {
     if (!sql) return res.status(503).json({ error: "Google Forms require the connected database." });
@@ -2759,10 +2900,20 @@ app.patch("/api/events/:id", async (req, res, next) => {
       if (!sql) {
         const event = demo.events.find((row) => row.id === id);
         if (!event) return res.status(404).json({ error: "Event not found." });
+      if (status === "published" && event.status !== "published") {
+        const missing = [!title && "event name", !text(req.body.category, 80).trim() && "event tags", !(date && time && endTime && gatesOpenTime) && "date, gates-open, start and end times", !(capacity > 0) && "attendee capacity", (!tracks.length || tracks.some((track) => !(Number(trackCapacities[track]) > 0))) && "at least one track with spots", !imageData && "cover image", !(text(req.body.venue, 200).trim() && mapUrl.trim()) && "venue and Google Maps link", (tracks.includes("Creators") && !influencerDeliverables.trim()) && "creator deliverables"].filter(Boolean);
+          if (missing.length) return res.status(400).json({ error: `Complete required listing fields before publishing: ${missing.join(", ")}.` });
+        }
         Object.assign(event, { title, brand, venue, area, date, endDate, time, endTime, gatesOpenTime, ticketUrl, reservationPhone, creatorPassNote, ageRestriction, hashtag, applicationDeadline, actionLabel, capacity, ticketPrice, ticketCurrency, category, tracks, trackCapacities, influencerDeliverables, mapUrl, dressCode, about, included, whoIsInvited, hostNote, videoUrl: videoUrlList[0] || "", videoUrlList, imageData, imageDataList, status });
+        if (status !== "pending") event.scheduledPublishAt = null;
         return res.json(event);
       }
-      const rows = await sql`UPDATE events SET title = ${title}, brand = ${brand}, venue = ${venue}, area = ${area}, date = ${date || null}, end_date = ${endDate || null}, time = ${time}, end_time = ${endTime}, gates_open_time = ${gatesOpenTime}, ticket_url = ${ticketUrl}, reservation_phone = ${reservationPhone}, creator_pass_note = ${creatorPassNote}, age_restriction = ${ageRestriction}, hashtag = ${hashtag}, application_deadline = ${applicationDeadline || null}, action_label = ${actionLabel}, capacity = ${capacity}, ticket_price = ${ticketPrice}, ticket_currency = ${ticketCurrency}, category = ${category}, tracks = ${tracks}, track_capacities = ${JSON.stringify(trackCapacities)}::jsonb, influencer_deliverables = ${influencerDeliverables}, map_url = ${mapUrl}, dress_code = ${dressCode}, about = ${about}, included = ${included}, who_is_invited = ${whoIsInvited}, host_note = ${hostNote}, video_url = ${videoUrlList[0] || ""}, video_gallery = ${videoUrlList}, image_data = ${imageData}, image_gallery = ${imageDataList}, status = ${status}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+      const previousStatus = sql ? (await sql`SELECT status FROM events WHERE id = ${id} LIMIT 1`)[0]?.status : demo.events.find((row) => row.id === id)?.status;
+      if (status === "published" && previousStatus !== "published") {
+        const missing = [!title && "event name", !text(req.body.category, 80).trim() && "event tags", !(date && time && endTime && gatesOpenTime) && "date, gates-open, start and end times", !(capacity > 0) && "attendee capacity", (!tracks.length || tracks.some((track) => !(Number(trackCapacities[track]) > 0))) && "at least one track with spots", !imageData && "cover image", !(venue.trim() && mapUrl.trim()) && "venue and Google Maps link", (tracks.includes("Creators") && !influencerDeliverables.trim()) && "creator deliverables"].filter(Boolean);
+        if (missing.length) return res.status(400).json({ error: `Complete required listing fields before publishing: ${missing.join(", ")}.` });
+      }
+      const rows = await sql`UPDATE events SET title = ${title}, brand = ${brand}, venue = ${venue}, area = ${area}, date = ${date || null}, end_date = ${endDate || null}, time = ${time}, end_time = ${endTime}, gates_open_time = ${gatesOpenTime}, ticket_url = ${ticketUrl}, reservation_phone = ${reservationPhone}, creator_pass_note = ${creatorPassNote}, age_restriction = ${ageRestriction}, hashtag = ${hashtag}, application_deadline = ${applicationDeadline || null}, action_label = ${actionLabel}, capacity = ${capacity}, ticket_price = ${ticketPrice}, ticket_currency = ${ticketCurrency}, category = ${category}, tracks = ${tracks}, track_capacities = ${JSON.stringify(trackCapacities)}::jsonb, influencer_deliverables = ${influencerDeliverables}, map_url = ${mapUrl}, dress_code = ${dressCode}, about = ${about}, included = ${included}, who_is_invited = ${whoIsInvited}, host_note = ${hostNote}, video_url = ${videoUrlList[0] || ""}, video_gallery = ${videoUrlList}, image_data = ${imageData}, image_gallery = ${imageDataList}, status = ${status}, scheduled_publish_at = CASE WHEN ${status} = 'pending' THEN scheduled_publish_at ELSE NULL END, updated_at = NOW() WHERE id = ${id} RETURNING *`;
       if (!rows[0]) return res.status(404).json({ error: "Event not found." });
       if (status === "published" && !rows[0].creator_pass_form_url) {
         await ensureCreatorPassGoogleForm({ ...rows[0], id, title, brand, venue, area, date, hashtag, creatorPassNote, imageData, imageDataList, status });
@@ -2791,13 +2942,19 @@ app.patch("/api/events/:id", async (req, res, next) => {
       return res.status(400).json({ error: "Invalid event status." });
     if (status === "published") {
       const rows = sql
-        ? await sql`SELECT id, title, brand, venue, area, date::text AS date, time, hashtag, creator_pass_note, creator_pass_form_url, image_data, image_gallery, status FROM events WHERE id = ${req.params.id} LIMIT 1`
+        ? await sql`SELECT id, title, brand, venue, area, date::text AS date, time, end_time AS "endTime", gates_open_time AS "gatesOpenTime", hashtag, category, tracks, track_capacities AS "trackCapacities", creator_pass_note, influencer_deliverables AS "influencerDeliverables", map_url AS "mapUrl", creator_pass_form_url, image_data, image_gallery, status, capacity, scheduled_publish_at AS "scheduledPublishAt" FROM events WHERE id = ${req.params.id} LIMIT 1`
         : [demo.events.find((row) => row.id === req.params.id)];
       const event = rows[0];
       if (!event) return res.status(404).json({ error: "Event not found." });
-      const missing = [
+      const missing = req.body.allowIncomplete === true || (event.status === "pending" && event.scheduledPublishAt) ? [] : [
         !event.title && "event name",
+        !event.category && "event tags",
+        !(event.date && event.time && event.endTime && event.gatesOpenTime) && "date, gates-open, start and end times",
+        !(Number(event.capacity) > 0) && "attendee capacity",
+        (!event.tracks?.length || event.tracks.some((track) => !(Number(event.trackCapacities?.[track]) > 0))) && "at least one track with spots",
         !event.image_data && !(event.image_gallery || event.imageDataList || event.imageGallery || []).length && "cover image",
+        !(event.venue?.trim() && event.mapUrl?.trim()) && "venue and Google Maps link",
+        (event.tracks?.includes("Creators") && !event.influencerDeliverables?.trim()) && "creator deliverables",
       ].filter(Boolean);
       if (missing.length) return res.status(400).json({ error: `Complete required listing fields before publishing: ${missing.join(", ")}.` });
     }
@@ -2805,10 +2962,11 @@ app.patch("/api/events/:id", async (req, res, next) => {
       const item = demo.events.find((row) => row.id === req.params.id);
       if (!item) return res.status(404).json({ error: "Event not found." });
       item.status = status;
+      if (status !== "pending") item.scheduledPublishAt = null;
       return res.json(item);
     }
     const rows =
-      await sql`UPDATE events SET status = ${status}, updated_at = NOW() WHERE id = ${req.params.id} RETURNING *`;
+      await sql`UPDATE events SET status = ${status}, scheduled_publish_at = CASE WHEN ${status} = 'pending' THEN scheduled_publish_at ELSE NULL END, updated_at = NOW() WHERE id = ${req.params.id} RETURNING *`;
     if (!rows[0]) return res.status(404).json({ error: "Event not found." });
     const result = rows[0];
     if (status === "published" && !result.creator_pass_form_url) {
@@ -2918,7 +3076,7 @@ app.post("/api/door/scan", async (req, res, next) => {
       const checkedIn = await sql`UPDATE ticket_requests SET checked_in_at = NOW() WHERE upper(ticket_token) = ${code} AND status IN ('approved', 'paid') AND checked_in_at IS NULL AND (${eventId} = '' OR event_id = ${eventId}) RETURNING id, guest_name AS "guestName", checked_in_at AS "checkedInAt"`;
       if (checkedIn[0]) {
         const name = checkedIn[0].guestName || "WhatsApp guest";
-        return res.json({ tone: "green", title: `Welcome ${name.split(" ")[0]}`, detail: "Ticket validated · entry recorded" });
+        return res.json({ tone: "green", title: `Welcome ${name.split(" ")[0]}`, detail: "Ticket validated Â· entry recorded" });
       }
       const existingTicket = (await sql`SELECT guest_name AS "guestName", checked_in_at AS "checkedInAt", status FROM ticket_requests WHERE upper(ticket_token) = ${code} AND (${eventId} = '' OR event_id = ${eventId}) LIMIT 1`)[0];
       if (existingTicket?.checkedInAt) return res.json({ tone: "amber", title: "Already scanned", detail: `${existingTicket.guestName || "Guest"} has already checked in.` });
@@ -2959,7 +3117,7 @@ app.post("/api/door/scan", async (req, res, next) => {
     res.json({
       tone: "green",
       title: `Welcome ${guest.name.split(" ")[0]}`,
-      detail: `Entry for ${Number(guest.plusOnes) + 1} · ${guest.track} · +20 points`,
+      detail: `Entry for ${Number(guest.plusOnes) + 1} Â· ${guest.track} Â· +20 points`,
     });
   } catch (error) {
     next(error);
@@ -3024,6 +3182,29 @@ if (process.env.NODE_ENV === "production" && !sql)
   throw new Error(
     "DATABASE_URL must be configured before starting the admin portal in production.",
   );
+async function publishScheduledEvents() {
+  if (!sql) {
+    const now = Date.now();
+    for (const event of demo.events) {
+      if (event.status === "pending" && event.scheduledPublishAt && new Date(event.scheduledPublishAt).getTime() <= now) {
+        event.status = "published";
+        event.scheduledPublishAt = null;
+      }
+    }
+    return;
+  }
+  try {
+    const rows = await sql`UPDATE events SET status = 'published', scheduled_publish_at = NULL, updated_at = NOW() WHERE status = 'pending' AND scheduled_publish_at <= NOW() RETURNING id, title, brand, venue, area, date::text AS date, time, hashtag, creator_pass_note AS "creatorPassNote", image_data AS "imageData", image_gallery AS "imageDataList", status`;
+    for (const event of rows) {
+      try { await ensureCreatorPassGoogleForm({ ...event, id: event.id, imageData: event.imageData, imageDataList: event.imageDataList || [] }); }
+      catch (error) { console.warn(`Scheduled event ${event.id} published, but creator-pass form setup failed:`, error); }
+    }
+  } catch (error) { console.warn("Scheduled event publishing check failed:", error?.message || error); }
+}
+const scheduledPublishTimer = setInterval(() => { void publishScheduledEvents(); }, 30_000);
+scheduledPublishTimer.unref?.();
+void publishScheduledEvents();
+
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(root, "dist")));
   app.get("*path", (_req, res) =>
@@ -3033,6 +3214,6 @@ if (process.env.NODE_ENV === "production") {
 
 app.listen(port, "0.0.0.0", () =>
   console.log(
-    `RSVP DXB API listening on port ${port}${sql ? " · Neon connected" : " · demo data mode"}`,
+    `RSVP DXB API listening on port ${port}${sql ? " Â· Neon connected" : " Â· demo data mode"}`,
   ),
 );

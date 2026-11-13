@@ -1,0 +1,2 @@
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS scheduled_publish_at TIMESTAMPTZ;

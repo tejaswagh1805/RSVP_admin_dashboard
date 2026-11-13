@@ -726,3 +726,16 @@ body:has(.signin-screen) { overflow: auto; }
 .venue-admin-card { border-radius:13px; }
 .venue-admin-card-image { height:205px; }
 @media(max-width:600px) { .venue-admin-form { padding:19px 15px; border-radius:11px; }.venue-form-grid { column-gap:0; }.venue-admin-form-heading h2 { font-size:32px; }.venue-form-section { margin-top:3px; padding:11px; }.venue-form-grid .field input:not([type="file"]),.venue-form-grid .field select { height:42px; }.venue-form-preview { height:190px; } }
+
+/* HTML RSVP flow additions */
+.publish-checklist { display:grid; gap:5px; padding:12px 18px; border-top:1px solid #c5a46633; color:#ded8ca; font-size:12px; }
+.publish-checklist strong { color:#dfc382; }
+.publish-checklist span { color:#aaa397; }
+.review-bulk-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:12px 0; }
+.review-bulk-actions label { display:flex; align-items:center; gap:7px; margin:0 8px 0 0; color:#c7c0b2; font-size:11px; }
+.review-bulk-actions input[type="checkbox"] { accent-color:#c5a466; }
+@media(max-width:600px) { .publish-checklist { padding:11px 14px; }.review-bulk-actions { align-items:stretch; }.review-bulk-actions>* { flex:1 1 auto; } }
+.message-log { display:grid; gap:7px; margin:12px 0; padding:12px 14px; border:1px solid #ffffff18; border-radius:8px; background:#11110f; color:#d8d1c2; font-size:11px; }
+.message-log>strong { color:#dfc58d; font-size:12px; }
+.message-log p { display:flex; justify-content:space-between; gap:10px; margin:0; padding:6px 0; border-top:1px solid #ffffff10; }
+.message-log small { color:#a8a092; white-space:nowrap; }

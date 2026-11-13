@@ -64,13 +64,28 @@ async function prepareImageForUpload(file) {
 
 async function uploadMedia(file, options = {}) {
   const prepared = await prepareImageForUpload(file);
-  const target = await api.mediaUploadUrl(prepared, options);
-  const response = await fetch(target.uploadUrl, { method: 'PUT', headers: { 'Content-Type': prepared.type }, body: prepared });
-  if (!response.ok) {
-    const details = (await response.text().catch(() => '')).trim().slice(0, 300);
-    throw new Error(`Media upload to storage failed (HTTP ${response.status})${details ? `: ${details}` : '.'}`);
-  }
+  const target = await retryTransient(() => api.mediaUploadUrl(prepared, options));
+  await retryTransient(async () => {
+    const response = await fetch(target.uploadUrl, { method: 'PUT', headers: { 'Content-Type': prepared.type }, body: prepared });
+    if (!response.ok) {
+      const details = (await response.text().catch(() => '')).trim().slice(0, 300);
+      const error = new Error(`Media upload to storage failed (HTTP ${response.status})${details ? `: ${details}` : '.'}`);
+      error.status = response.status;
+      throw error;
+    }
+  });
   return { ...target, file: prepared };
+}
+
+async function retryTransient(operation) {
+  for (let attempt = 0; ; attempt += 1) {
+    try { return await operation(); }
+    catch (error) {
+      const retryable = !error.status || [408, 425, 429, 500, 502, 503, 504].includes(error.status);
+      if (!retryable || attempt >= 2) throw error;
+      await new Promise((resolve) => window.setTimeout(resolve, 500 * (2 ** attempt)));
+    }
+  }
 }
 
 export const api = {
@@ -102,6 +117,7 @@ export const api = {
   updatePeopleProfile: (id, profile) => request(`/people-profiles/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(profile) }),
   setPeopleProfileActive: (id, active) => request(`/people-profiles/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ active }) }),
   updateEvent: (id, update) => request(`/events/${id}`, { method: 'PATCH', body: JSON.stringify(typeof update === 'string' ? { status: update } : update) }),
+  scheduleEventPublish: (id, scheduledAt, allowIncomplete = false) => request(`/events/${encodeURIComponent(id)}/schedule`, { method: 'POST', body: JSON.stringify({ scheduledAt, allowIncomplete }) }),
   setEventTopPick: (id, topPick) => request(`/events/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ topPick }) }),
   setEventLatest: (id, latestEvent) => request(`/events/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ latestEvent }) }),
   createCreatorPassForm: (id) => request(`/events/${encodeURIComponent(id)}/creator-pass-form`, { method: 'POST' }),
@@ -115,7 +131,7 @@ export const api = {
   eventRsvpRequests: (eventId) => request(`/event-rsvp-requests?eventId=${encodeURIComponent(eventId)}`),
   eventTicketInquiries: (eventId) => request(`/event-ticket-inquiries?eventId=${encodeURIComponent(eventId)}`),
   updateEventTicketInquiry: (id, status) => request(`/event-ticket-inquiries/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
-  decideEventRsvp: (id, status) => request(`/event-rsvp-requests/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  decideEventRsvp: (id, status, message = '', personalLine = '') => request(`/event-rsvp-requests/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status, message, personalLine }) }),
   createGuestInvitation: (guest) => request('/guest-invitations', { method: 'POST', body: JSON.stringify(guest) }),
   checkInGuestInvitation: (id) => request(`/door/guest-invitations/${encodeURIComponent(id)}/check-in`, { method: 'POST' }),
   scanGuestPass: (code, eventId) => request('/door/guest-pass', { method: 'POST', body: JSON.stringify({ code, eventId }) }),

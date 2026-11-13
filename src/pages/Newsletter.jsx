@@ -26,11 +26,13 @@ export default function Newsletter() {
   const [form, setForm] = useState(initialForm);
   const [events, setEvents] = useState([]);
   const [eventId, setEventId] = useState('');
+  const [segment, setSegment] = useState('all');
   const [siteUrl, setSiteUrl] = useState('https://www.rsvpdxb.com');
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -47,6 +49,17 @@ export default function Newsletter() {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => {
+    try {
+      const draft = JSON.parse(localStorage.getItem('rsvpdxb-event-invite') || 'null');
+      if (!draft) return;
+      if (draft.eventId) setEventId(String(draft.eventId));
+      if (draft.subject || draft.body) setForm({ subject: String(draft.subject || ''), body: String(draft.body || '') });
+      if (['all', 'media', 'influencer', 'hni'].includes(draft.segment)) setSegment(draft.segment);
+      localStorage.removeItem('rsvpdxb-event-invite');
+    } catch { /* Ignore an incomplete local draft. */ }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -75,7 +88,8 @@ export default function Newsletter() {
   async function sendCampaign(event) {
     event.preventDefault();
     if (!audience.active) return;
-    const accepted = window.confirm(`Send “${form.subject.trim()}” to all ${audience.active} opted-in subscribers now? This will send real emails.`);
+      const groupName = { all: 'all opted-in subscribers', media: 'opted-in Media members', influencer: 'opted-in Influencer members', hni: 'opted-in HNI members' }[segment];
+      const accepted = window.confirm(`Send “${form.subject.trim()}” to ${groupName} now? This will send real emails.`);
     if (!accepted) return;
     setBusy(true); setError(''); setNotice('Sending campaign… Keep this page open until the send completes.');
     try {
@@ -84,10 +98,11 @@ export default function Newsletter() {
         const upload = await api.uploadMedia(imageFile);
         imageUrl = upload.publicUrl;
       }
-      const { campaign = {} } = await api.sendNewsletterCampaign({ ...form, imageUrl, eventId, confirmSend: true });
+      const { campaign = {} } = await api.sendNewsletterCampaign({ ...form, imageUrl, eventId, segment, confirmSend: true });
       setNotice(`Campaign finished: ${campaign.sentCount} sent, ${campaign.failedCount} failed.`);
       setForm(initialForm);
       setEventId('');
+      setSegment('all');
       setImageFile(null); setImagePreview('');
       await refresh();
     } catch (sendError) {
@@ -95,6 +110,23 @@ export default function Newsletter() {
       setNotice('');
       await refresh();
     } finally { setBusy(false); }
+  }
+
+  async function sendTestEmail() {
+    if (form.subject.trim().length < 4 || form.body.trim().length < 20) {
+      setError('Add a subject and at least 20 characters of email copy before sending a test.');
+      return;
+    }
+    setTesting(true); setError(''); setNotice('Sending a test email to your admin address…');
+    try {
+      let imageUrl = '';
+      if (imageFile) imageUrl = (await api.uploadMedia(imageFile)).publicUrl;
+      const result = await api.sendNewsletterCampaign({ ...form, imageUrl, eventId, segment, testOnly: true });
+      setNotice(`Test email sent to ${result.recipient}.`);
+    } catch (testError) {
+      setError(testError.message || 'The test email could not be sent.');
+      setNotice('');
+    } finally { setTesting(false); }
   }
 
   return <>
@@ -109,6 +141,7 @@ export default function Newsletter() {
       <div className="newsletter-heading"><div><span className="eyebrow"><Send size={12} /> NEW CAMPAIGN</span><h2>Compose an update</h2><p>Sending starts when you confirm. The site sends to opted-in addresses individually through Amazon SES.</p></div></div>
       <form onSubmit={sendCampaign}>
         <label className="field"><span>Subject *</span><input required minLength="4" maxLength="140" value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} placeholder="What’s new at RSVP DXB?" /></label>
+        <label className="field"><span>Send to</span><select value={segment} onChange={(event) => setSegment(event.target.value)}><option value="all">All opted-in subscribers</option><option value="media">Media members</option><option value="influencer">Influencers</option><option value="hni">HNI members</option></select><small>Members without active newsletter consent or who unsubscribed are excluded.</small></label>
         <label className="field newsletter-event-field"><span>Link this campaign to an event (optional)</span><select value={eventId} onChange={(event) => setEventId(event.target.value)}><option value="">No event link</option>{events.map((item) => <option key={item.id} value={item.id}>{item.title}{item.date ? ` · ${item.date}` : ''}</option>)}</select><small>Choosing an event makes the campaign poster clickable and adds a prominent event and RSVP button to the email.</small></label>
         {selectedEvent ? <div className="newsletter-event-preview"><CheckCircle2 size={15} /><span>Email links will open <strong>{selectedEvent.title}</strong>.</span><a href={eventUrl} target="_blank" rel="noreferrer">Preview event ↗</a></div> : null}
         <label className="field"><span>Email message *</span><textarea required minLength="20" maxLength="10000" rows="9" value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder={'Write your update here.\n\nSeparate paragraphs with a blank line.'} /></label>
@@ -116,7 +149,7 @@ export default function Newsletter() {
         <p className="newsletter-send-note"><AlertCircle size={14} /> Only subscribers with recorded consent are included. Every campaign includes an unsubscribe link.</p>
         {error ? <p className="newsletter-error" role="alert">{error}</p> : null}
         {notice ? <p className="newsletter-notice" role="status"><CheckCircle2 size={15} />{notice}</p> : null}
-        <button className="button button-primary newsletter-send-button" type="submit" disabled={busy || loading || !Number(audience.active)}>{busy ? 'Sending…' : `Send campaign to ${Number(audience.active).toLocaleString()} subscriber${Number(audience.active) === 1 ? '' : 's'}`} <Send size={15} /></button>
+        <div className="flex flex-wrap gap-2"><button className="button button-secondary" type="button" onClick={sendTestEmail} disabled={testing || busy || loading}>{testing ? 'Sending test…' : 'Send test to me'} <Mail size={15} /></button><button className="button button-primary newsletter-send-button" type="submit" disabled={busy || loading || !Number(audience.active)}>{busy ? 'Sending…' : segment === 'all' ? `Send campaign to ${Number(audience.active).toLocaleString()} opted-in subscribers` : `Send campaign to opted-in ${{ media: 'Media', influencer: 'Influencer', hni: 'HNI' }[segment]} members`} <Send size={15} /></button></div>
       </form>
     </section>
 
