@@ -135,7 +135,7 @@ export default function App() {
     newsletter: <Newsletter />,
     enquiries: <Enquiries act={act} />,
     invitations: <Invitations events={data.events} />,
-    wall: <Wall rows={data.wall} act={act} />,
+    wall: <Wall rows={data.wall} events={data.events} act={act} />,
     clients: <Clients rows={data.clients} act={act} />,
       door: <Door guests={data.guests} events={data.events} act={act} />,
   };
