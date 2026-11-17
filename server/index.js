@@ -1138,16 +1138,54 @@ app.post("/api/integrations/google-forms/creator-pass", async (req, res, next) =
     const instagramHandle = text(req.body.instagramHandle, 100);
     const instagramFollowers = text(req.body.instagramFollowers, 40);
     const creatorAddress = text(req.body.creatorAddress, 500);
+    const formId = text(req.body.formId, 200);
+    const formResponseId = text(req.body.responseId, 200);
+    const submittedAt = new Date(String(req.body.submittedAt || ""));
     if (name.length < 2 || !/^\+?\d{8,15}$/.test(phone))
       return res.status(400).json({ error: "A name and valid international phone number are required." });
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       return res.status(400).json({ error: "Enter a valid email address." });
+    if (!formId || !formResponseId || !Number.isFinite(submittedAt.getTime()))
+      return res.status(400).json({ error: "This Apps Script version does not identify form responses. Update it to send formId, responseId, and submittedAt, then run syncAllCreatorPassResponses to sync this submission." });
     const events = await sql`SELECT id, title, date::text AS date, time, venue, area FROM events WHERE id = ${eventId} AND status = 'published' AND (date IS NULL OR date >= (NOW() AT TIME ZONE 'Asia/Dubai')::date) AND (application_deadline IS NULL OR application_deadline >= (NOW() AT TIME ZONE 'Asia/Dubai')::date) LIMIT 1`;
     if (!events[0]) return res.status(400).json({ error: "This event is no longer accepting creator pass requests. The form may still be open; contact the RSVP DXB team." });
-    const recent = await sql`SELECT id FROM event_ticket_inquiries WHERE event_id = ${eventId} AND phone = ${phone} AND request_type = 'creator_pass' AND status IN ('pending', 'accepted', 'waitlisted') LIMIT 1`;
-    if (recent[0]) return res.json({ received: true, duplicate: true });
-    const id = `google-form-${randomBytes(16).toString("hex")}`;
-    await sql`INSERT INTO event_ticket_inquiries (id, event_id, full_name, email, phone, request_type, instagram_handle, instagram_followers, creator_address) VALUES (${id}, ${eventId}, ${name}, ${email}, ${phone}, 'creator_pass', ${instagramHandle}, ${instagramFollowers}, ${creatorAddress})`;
+    const responseKey = `${formId}:${formResponseId}`;
+    const existingResponse = await sql`SELECT id FROM event_ticket_inquiries WHERE google_form_response_id = ${responseKey} LIMIT 1`;
+    if (existingResponse[0]) return res.json({ received: true, duplicate: true });
+
+    // Older versions saved the request before response IDs were included. When
+    // replaying those form responses, attach the response ID to the matching
+    // old row instead of creating a second review item.
+    const previousRequest = await sql`
+      UPDATE event_ticket_inquiries
+      SET google_form_response_id = ${responseKey}
+      WHERE id = (
+        SELECT id FROM event_ticket_inquiries
+        WHERE event_id = ${eventId} AND phone = ${phone} AND request_type = 'creator_pass'
+          AND google_form_response_id = ''
+          AND created_at BETWEEN ${submittedAt.toISOString()}::timestamptz - INTERVAL '10 minutes'
+            AND ${submittedAt.toISOString()}::timestamptz + INTERVAL '10 minutes'
+        ORDER BY created_at DESC
+        LIMIT 1
+      )
+      RETURNING id
+    `;
+    if (previousRequest[0]) return res.json({ received: true, duplicate: true, alreadySaved: true });
+
+    const id = `google-form-${createHash("sha256").update(responseKey).digest("hex")}`;
+    const saved = await sql`
+      INSERT INTO event_ticket_inquiries (
+        id, event_id, full_name, email, phone, request_type, instagram_handle,
+        instagram_followers, creator_address, google_form_response_id
+      )
+      VALUES (
+        ${id}, ${eventId}, ${name}, ${email}, ${phone}, 'creator_pass',
+        ${instagramHandle}, ${instagramFollowers}, ${creatorAddress}, ${responseKey}
+      )
+      ON CONFLICT DO NOTHING
+      RETURNING id
+    `;
+    if (!saved[0]) return res.json({ received: true, duplicate: true });
     const delivery = await sendCreatorPassReceivedEmail({ name, email, event: events[0] });
     res.status(201).json({ received: true, delivery });
   } catch (error) { next(error); }

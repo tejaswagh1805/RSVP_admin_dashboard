@@ -305,10 +305,14 @@ ALTER TABLE event_ticket_inquiries ADD COLUMN IF NOT EXISTS instagram_handle TEX
 ALTER TABLE event_ticket_inquiries ADD COLUMN IF NOT EXISTS instagram_followers TEXT NOT NULL DEFAULT '';
 ALTER TABLE event_ticket_inquiries ADD COLUMN IF NOT EXISTS creator_address TEXT NOT NULL DEFAULT '';
 ALTER TABLE event_ticket_inquiries ADD COLUMN IF NOT EXISTS request_notes TEXT NOT NULL DEFAULT '';
+ALTER TABLE event_ticket_inquiries ADD COLUMN IF NOT EXISTS google_form_response_id TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS event_ticket_inquiries_event_created_idx
   ON event_ticket_inquiries(event_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS event_ticket_inquiries_type_status_idx
   ON event_ticket_inquiries(event_id, request_type, status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS event_ticket_inquiries_google_form_response_uidx
+  ON event_ticket_inquiries(google_form_response_id)
+  WHERE google_form_response_id <> '';
 ALTER TABLE ticket_requests ADD COLUMN IF NOT EXISTS stripe_session_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE ticket_requests ADD COLUMN IF NOT EXISTS ticket_token TEXT UNIQUE;
 ALTER TABLE ticket_requests ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;

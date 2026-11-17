@@ -263,6 +263,9 @@ function submitCreatorPassResponse_(form, response) {
   };
   const payload = {
     eventId: eventId,
+    formId: form.getId(),
+    responseId: response.getId(),
+    submittedAt: response.getTimestamp().toISOString(),
     name: answerFor("name"),
     email: response.getRespondentEmail() || answerFor("email"),
     phone: answerFor("mobile") || answerFor("phone") || answerFor("whatsapp"),

@@ -247,13 +247,14 @@ export async function sendCreatorPassDecisionEmail({ name, email, event, status,
     : waitlisted
       ? `Thank you for requesting a creator pass for ${event.title}. Your request is on the waitlist; the team will contact you if a place opens.`
       : `Thank you for your interest in ${event.title}. Unfortunately, we are unable to offer you a creator pass for this event.`;
+  const textMessage = accepted ? message : `${message}\n\nEvent details: ${details}`;
   const html = creatorPassEmailHtml({ name, event, accepted, waitlisted, entryCode, message, details });
   try {
     const ses = new SESClient({ region });
     await ses.send(new SendEmailCommand({
       Source: from,
       Destination: { ToAddresses: [email] },
-      Message: { Subject: { Charset: "UTF-8", Data: subject }, Body: { Text: { Charset: "UTF-8", Data: `Hello ${name || "there"},\n\n${message}\n\nWarm regards,\nThe RSVP DXB team` }, Html: { Charset: "UTF-8", Data: html } } },
+      Message: { Subject: { Charset: "UTF-8", Data: subject }, Body: { Text: { Charset: "UTF-8", Data: `Hello ${name || "there"},\n\n${textMessage}\n\nWarm regards,\nThe RSVP DXB team` }, Html: { Charset: "UTF-8", Data: html } } },
     }));
     return { status: "submitted", message: "Decision email accepted by Amazon SES; inbox delivery is not confirmed." };
   } catch (error) {
