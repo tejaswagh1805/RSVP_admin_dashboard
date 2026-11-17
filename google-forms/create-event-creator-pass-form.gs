@@ -222,7 +222,8 @@ function onCreatorPassSubmit(e) {
 
 /**
  * Recovery tool: run manually to resend recorded responses if an installable
- * submit trigger failed. The admin endpoint ignores duplicate phone requests.
+ * submit trigger failed. The admin endpoint deduplicates by Google Form
+ * response ID, so replaying saved responses does not create extra queue rows.
  */
 function syncAllCreatorPassResponses() {
   const properties = PropertiesService.getScriptProperties().getProperties();
