@@ -123,7 +123,6 @@ export const api = {
   createCreatorPassForm: (id) => request(`/events/${encodeURIComponent(id)}/creator-pass-form`, { method: 'POST' }),
   deleteEvent: (id) => request(`/events/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   approveTicketRequest: (id) => request(`/ticket-requests/${encodeURIComponent(id)}/approve`, { method: 'POST' }),
-  moderatePost: (id, action) => request(`/wall/${id}`, { method: 'PATCH', body: JSON.stringify({ action }) }),
   addCredits: (id, amount) => request(`/clients/${id}/credits`, { method: 'POST', body: JSON.stringify({ amount }) }),
   scan: (code, eventId) => request('/door/scan', { method: 'POST', body: JSON.stringify({ code, eventId }) }),
   walkIn: (guest) => request('/door/walk-ins', { method: 'POST', body: JSON.stringify(guest) }),

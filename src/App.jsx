@@ -22,7 +22,7 @@ import Enquiries from './pages/Enquiries.jsx';
 
 export default function App() {
   const [page, setPage] = useState(() => location.hash.replace('#/', '') || 'dashboard');
-  const [data, setData] = useState({ applications: [], members: [], events: [], siteMedia: [], peopleProfiles: [], venues: [], wall: [], clients: [], guests: [], dashboard: {} });
+  const [data, setData] = useState({ applications: [], members: [], events: [], siteMedia: [], peopleProfiles: [], venues: [], clients: [], guests: [], dashboard: {} });
   const [admin, setAdmin] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [demoMode, setDemoMode] = useState(false);
@@ -51,10 +51,10 @@ export default function App() {
         if (err.status === 404) return [];
         throw err;
       });
-      const [dashboard, applications, members, fetchedEvents, siteMedia, peopleProfiles, venues, wall, clients, guests] = await Promise.all([
-        api.dashboard(), api.list('applications'), api.list('members'), api.list('events'), api.list('site-media'), peopleProfilesRequest, venuesRequest, api.list('wall'), api.list('clients'), api.list('door/guests'),
+      const [dashboard, applications, members, fetchedEvents, siteMedia, peopleProfiles, venues, clients, guests] = await Promise.all([
+        api.dashboard(), api.list('applications'), api.list('members'), api.list('events'), api.list('site-media'), peopleProfilesRequest, venuesRequest, api.list('clients'), api.list('door/guests'),
       ]);
-      setData({ dashboard, applications, members, events: fetchedEvents, siteMedia, peopleProfiles, venues, wall, clients, guests });
+      setData({ dashboard, applications, members, events: fetchedEvents, siteMedia, peopleProfiles, venues, clients, guests });
     } catch (err) { if (err.status === 401) { setAdmin(null); setAuthError(err.message); } else setError(err.message); }
     finally { setLoading(false); }
   }, []);
@@ -116,7 +116,7 @@ export default function App() {
   const signOut = async (switching = false) => {
     try { await api.logout(); } catch (err) { setToast(`Could not sign out: ${err.message}`); return; }
     setAdmin(null);
-    setData({ applications: [], members: [], events: [], siteMedia: [], peopleProfiles: [], venues: [], wall: [], clients: [], guests: [], dashboard: {} });
+    setData({ applications: [], members: [], events: [], siteMedia: [], peopleProfiles: [], venues: [], clients: [], guests: [], dashboard: {} });
     setAuthNotice(switching ? 'Signed out. Sign in with the other admin account.' : 'You have signed out.');
     setAuthError('');
     setLoading(false);
@@ -135,7 +135,7 @@ export default function App() {
     newsletter: <Newsletter />,
     enquiries: <Enquiries act={act} />,
     invitations: <Invitations events={data.events} />,
-    wall: <Wall rows={data.wall} events={data.events} act={act} />,
+    wall: <Wall events={data.events} />,
     clients: <Clients rows={data.clients} act={act} />,
       door: <Door guests={data.guests} events={data.events} act={act} />,
   };
