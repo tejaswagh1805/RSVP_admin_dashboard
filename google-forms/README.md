@@ -2,6 +2,8 @@
 
 When an event is published, the admin server asks Apps Script to create a Google Form in the automation account, add the creator-pass questions and event details, optionally include the event cover image, and save the responder URL on that event. The cover image is optional: if Google Forms or the media URL rejects it, form creation continues without the image. The customer event page opens that event-specific form. Submissions are synced back into the event's existing RSVP review queue. Each event has its own form.
 
+`CreatorPassForm.gs` is a legacy manual connector for only the form IDs explicitly listed in its `eventForms` object. Do not use it to provision event forms. Use `create-event-creator-pass-form.gs` and the admin dashboard's **Create forms for active events** action to backfill all current published events; publishing a future event creates its form automatically.
+
 ## One-time Google setup
 
 1. Sign in as the Google account that should own future forms (for example, `connect@rsvpdxb.com`), open [Apps Script](https://script.google.com), create a standalone project, and paste `create-event-creator-pass-form.gs` into its editor. No existing template form or template ID is required.
@@ -16,10 +18,10 @@ When an event is published, the admin server asks Apps Script to create a Google
 
 ## Deploy the app changes
 
-1. Run `npm run db:migrate` in both `RSVP_admin_dashboard` and `RSVP-DXB-customer` against the shared database. The migrations add the per-event form URL (and admin creation error) columns.
+1. Confirm `DATABASE_URL` in both projects targets the same production database. Run `npm run db:migrate` in `RSVP_admin_dashboard` and `RSVP-DXB-customer`. The admin runner applies through migration 012; migration 011 removes only demo rows `w1`–`w5` and `b1`–`b5`. The customer runner applies through migration 0032, including the member-content submission support and scheduled-event/referral migrations.
 2. Deploy/restart the admin server with the Apps Script variables set, then deploy the customer site. Publishing a new event creates its form automatically. Existing published events show **Create creator pass form** in the admin event list until their form is created.
 3. In Apps Script, select and run `repairExistingCreatorPassFormAccess` to grant public responder access to every form ID mapped in that script project's properties. This repairs existing forms only. Then choose **Deploy → Manage deployments → Edit → New version → Deploy** so future event publishes run the updated `doPost`; each newly published event will get its own form and the script will grant its public responder permission automatically. Keep **Execute as** set to the automation account and access set to **Anyone**. Verify a repaired responder URL in a private/incognito browser window. `syncAllCreatorPassResponses` only retries submissions; it does not repair access.
-4. Submit one test application. It should appear under that event's admin RSVP review panel, and the original response remains visible in Google Forms. If a submit trigger previously failed, run `syncAllCreatorPassResponses` from Apps Script to retry the responses already recorded in the mapped forms. Check **Executions** for any response sync errors; the log includes the HTTP status and admin error text.
+4. After updating the Apps Script deployment, select and run `closeExpiredCreatorPassForms` once. It installs a daily check that closes event forms after the event/application deadline; the admin webhook rejects expired requests, so leaving an old Google Form open can otherwise appear to accept responses that cannot enter the review queue. New submissions to active events receive a request-received email; accept, waitlist, and decline decisions send their own update email. Submit one test application to an active event and confirm it appears in that event's admin RSVP review panel. If a submit trigger previously failed, run `syncAllCreatorPassResponses` from Apps Script to retry the responses already recorded in the mapped forms. Check **Executions** for any response sync or receipt-email errors; the log includes the HTTP status and admin error text.
 
 If Google form creation fails, the event stays published, the dashboard displays the error, and its **Create creator pass form** button can retry safely without making a duplicate form.
 

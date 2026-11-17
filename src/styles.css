@@ -310,6 +310,7 @@ td strong { color: #dedbd3; font-size: 10px; font-weight: 500; }
 .rank-silver { border-color: #3d3e3d; background: #242624; color: #b3b8b4; }.rank-diamond { border-color: #34434b; background: #202a2f; color: #9db8c4; }.rank-platinum { border-color: #494343; background: #292526; color: #d1b4b8; }.rank-bronze { border-color: #4b382b; background: #29211c; color: #c18f69; }
 .points-cell { color: #dfbf7e !important; }.points-cell span { color: #77766f; font-size: 9px; }
 .event-filter { margin: 0; }
+.bulk-form-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 12px 0; color: var(--muted); font-size: 11px; }
 .table-subline { display: block; margin-top: 4px; color: #77766f; font-size: 9px; }
 .small-action { display: inline-flex; align-items: center; gap: 4px; padding: 6px 8px; border: 1px solid #35352e; border-radius: 4px; background: #1c1c19; color: #bdbab0; font-size: 9px; cursor: pointer; }
 .small-action:hover { border-color: #68583a; color: #e1c58b; }
@@ -625,7 +626,7 @@ body:has(.signin-screen) { overflow: auto; }
 .event-create-header p { margin-top:7px; color:#969287; font-size:11px; }
 .event-create-header .icon-button { width:36px; height:36px; border-radius:50%; transition:transform .2s,background .2s,color .2s; }
 .event-create-header .icon-button:hover { transform:rotate(90deg); background:#c5a46618; color:#e4c988; }
-.event-create-body { min-height:0; padding:20px 28px 28px; scrollbar-color:#726343 #191916; scrollbar-width:thin; scroll-behavior:smooth; }
+.event-create-body { min-height:0; flex:1; overflow-y:auto; padding:20px 28px 28px; scrollbar-color:#726343 #191916; scrollbar-width:thin; scroll-behavior:smooth; }
 .event-live-preview { position:relative; display:flex; min-height:76px; align-items:center; gap:14px; margin-bottom:16px; padding:11px 15px; overflow:hidden; border:1px solid #c5a46635; border-radius:10px; background:linear-gradient(105deg,#c5a46615,#c5a46605 62%,#ffffff03); }
 .event-live-preview::after { position:absolute; top:0; right:0; width:32%; height:100%; background:linear-gradient(110deg,transparent,#c5a46608); content:""; pointer-events:none; }
 .event-preview-image { display:grid; width:54px; height:54px; flex:none; place-items:center; overflow:hidden; border:1px solid #c5a46645; border-radius:8px; background:#29251d; color:#c5a466; }

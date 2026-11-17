@@ -25,9 +25,9 @@ export default function WebsiteMedia({ rows, act }) {
     setError('');
     if (!next) { setFile(null); setPreview(''); return; }
     const validImage = ['image/jpeg', 'image/png', 'image/webp'].includes(next.type) && next.size <= 12 * 1024 * 1024;
-    const validVideo = slot === 'gallery' && ['video/mp4', 'video/webm', 'video/quicktime'].includes(next.type) && next.size <= 500 * 1024 * 1024;
+    const validVideo = slot === 'gallery' && ['video/mp4', 'video/webm'].includes(next.type) && next.size <= 50 * 1024 * 1024;
     if (!validImage && !validVideo) {
-      setFile(null); setPreview(''); setError(slot === 'gallery' ? 'Choose a JPG, PNG or WebP image up to 12 MB, or an MP4, WebM or MOV video up to 500 MB.' : 'Choose a JPG, PNG or WebP image up to 12 MB.'); return;
+      setFile(null); setPreview(''); setError(slot === 'gallery' ? 'Choose a JPG, PNG or WebP image up to 12 MB, or an MP4 or WebM video up to 50 MB.' : 'Choose a JPG, PNG or WebP image up to 12 MB.'); return;
     }
     setMediaType(validVideo ? 'video' : 'image');
     if (!validVideo) setCaptionsFile(null);
@@ -100,7 +100,7 @@ export default function WebsiteMedia({ rows, act }) {
         </div>
         <label className="field"><span>Caption</span><textarea rows="2" maxLength={500} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Optional supporting text" /></label>
         {slot === 'top_pick' ? <label className="field"><span>Link (optional)</span><input type="url" maxLength={500} value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://…" /></label> : null}
-        <label className="field"><span>{slot === 'gallery' ? 'Image (JPG, PNG or WebP, up to 12 MB) or video (MP4, WebM or MOV, up to 500 MB)' : 'Image (JPG, PNG or WebP, up to 12 MB)'} *</span><input type="file" accept={slot === 'gallery' ? 'image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime' : 'image/jpeg,image/png,image/webp'} onChange={(e) => { chooseFile(e.target.files?.[0] || null); e.target.value = ''; }} /></label>
+    <label className="field"><span>{slot === 'gallery' ? 'Image (JPG, PNG or WebP, up to 12 MB) or video (MP4 or WebM, up to 50 MB)' : 'Image (JPG, PNG or WebP, up to 12 MB)'} *</span><input type="file" accept={slot === 'gallery' ? 'image/jpeg,image/png,image/webp,video/mp4,video/webm' : 'image/jpeg,image/png,image/webp'} onChange={(e) => { chooseFile(e.target.files?.[0] || null); e.target.value = ''; }} /></label>
         {mediaType === 'video' ? <label className="field"><span>Captions (optional, WebVTT .vtt up to 1 MB)</span><input type="file" accept=".vtt,text/vtt" onChange={(e) => { const selected = e.target.files?.[0] || null; setCaptionsFile(selected && selected.size <= 1024 * 1024 ? selected : null); if (selected && selected.size > 1024 * 1024) setError('Captions file must be 1 MB or smaller.'); e.target.value = ''; }} /></label> : null}
         {preview ? (mediaType === 'video' ? <video src={preview} controls muted playsInline style={{ maxWidth: 360, maxHeight: 220, borderRadius: 8 }} /> : <img src={preview} alt="Selected upload preview" style={{ maxWidth: 360, maxHeight: 220, objectFit: 'cover', borderRadius: 8 }} />) : null}
         {error ? <p className="event-image-error" role="alert">{error}</p> : null}

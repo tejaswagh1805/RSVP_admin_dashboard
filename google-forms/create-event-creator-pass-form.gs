@@ -20,6 +20,7 @@ function doPost(e) {
         const existing = FormApp.openById(existingId);
         ensureAnyoneCanRespond_(existing);
         ensureSubmitTrigger_(existing);
+        ensureCreatorPassExpiryTrigger_();
         return output_({ formId: existingId, responderUrl: existing.getPublishedUrl() });
       }
 
@@ -77,6 +78,7 @@ function doPost(e) {
       properties.setProperty("EVENT_FOR_FORM_" + formId, String(event.id));
       ensureAnyoneCanRespond_(form);
       ensureSubmitTrigger_(form);
+      ensureCreatorPassExpiryTrigger_();
       return output_({ formId: formId, responderUrl: form.getPublishedUrl() });
     } finally {
       lock.releaseLock();
@@ -161,6 +163,56 @@ function ensureSubmitTrigger_(form) {
   if (!exists) ScriptApp.newTrigger("onCreatorPassSubmit").forForm(form).onFormSubmit().create();
 }
 
+function ensureCreatorPassExpiryTrigger_() {
+  const exists = ScriptApp.getProjectTriggers().some(function (trigger) {
+    return trigger.getHandlerFunction() === "closeExpiredCreatorPassForms";
+  });
+  if (!exists) {
+    ScriptApp.newTrigger("closeExpiredCreatorPassForms")
+      .timeBased()
+      .everyDays(1)
+      .atHour(3)
+      .create();
+  }
+}
+
+/** Close event forms when the admin API says the event/deadline is no longer active. */
+function closeExpiredCreatorPassForms() {
+  ensureCreatorPassExpiryTrigger_();
+  const properties = PropertiesService.getScriptProperties();
+  const webhookUrl = properties.getProperty("RSVP_CREATOR_PASS_WEBHOOK_URL");
+  const webhookSecret = properties.getProperty("RSVP_CREATOR_PASS_WEBHOOK_SECRET");
+  if (!webhookUrl || !webhookSecret) throw new Error("Configure the creator-pass webhook properties before closing expired forms.");
+
+  const response = UrlFetchApp.fetch(webhookUrl.replace(/\/$/, "") + "/events", {
+    method: "get",
+    headers: { Authorization: "Bearer " + webhookSecret },
+    muteHttpExceptions: true,
+  });
+  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+    throw new Error("Could not check active creator-pass events (HTTP " + response.getResponseCode() + "): " + String(response.getContentText() || "").slice(0, 300));
+  }
+  const activeEvents = JSON.parse(response.getContentText() || "[]");
+  if (!Array.isArray(activeEvents)) throw new Error("The active creator-pass events response was invalid.");
+  const activeEventIds = new Set(activeEvents.map(function (event) { return String(event.id); }));
+  const formIds = Object.keys(properties.getProperties())
+    .filter(function (key) { return key.indexOf("EVENT_FOR_FORM_") === 0; });
+  let closed = 0;
+  formIds.forEach(function (key) {
+    const formId = key.substring("EVENT_FOR_FORM_".length);
+    const eventId = properties.getProperty(key);
+    if (!activeEventIds.has(String(eventId))) {
+      const form = FormApp.openById(formId);
+      if (form.isAcceptingResponses()) {
+        form.setAcceptingResponses(false);
+        closed += 1;
+        Logger.log("Closed creator-pass form after its event/deadline ended: " + form.getTitle());
+      }
+    }
+  });
+  Logger.log("Expired creator-pass form check complete. Closed: " + closed + "; checked: " + formIds.length + ".");
+}
+
 function onCreatorPassSubmit(e) {
   const form = e && e.source;
   const response = e && e.response;
@@ -227,7 +279,19 @@ function submitCreatorPassResponse_(form, response) {
   });
   if (result.getResponseCode() < 200 || result.getResponseCode() >= 300) {
     const responseText = String(result.getContentText() || "").slice(0, 300);
+    if (result.getResponseCode() === 400 && responseText.indexOf("no longer accepting creator pass requests") !== -1) {
+      try {
+        form.setAcceptingResponses(false);
+        console.warn("Closed this form because its event or application deadline has passed.");
+      } catch (closeError) {
+        console.error("Could not close the expired creator-pass form: " + String(closeError && closeError.message || closeError));
+      }
+    }
     throw new Error("RSVP admin could not save this application (HTTP " + result.getResponseCode() + "): " + responseText + ". The response remains available in Google Forms.");
+  }
+  const resultPayload = JSON.parse(result.getContentText() || "{}");
+  if (resultPayload.delivery && resultPayload.delivery.status !== "submitted" && resultPayload.delivery.status !== "skipped") {
+    console.warn("Creator-pass request was saved, but its receipt email was not sent: " + String(resultPayload.delivery.message || resultPayload.delivery.status));
   }
 }
 

@@ -13,6 +13,7 @@ import {
   sendMemberActivationEmail,
   sendRsvpDecisionEmail,
   sendCreatorPassDecisionEmail,
+  sendCreatorPassReceivedEmail,
 } from "./invitation-delivery.js";
 import {
   clearSessionCookie,
@@ -539,7 +540,7 @@ const selectFor = {
   members:
     'SELECT id, member_number AS "memberNumber", name, email, track, source_track AS "sourceTrack", rank, points, events, city, profile_url AS "profileUrl", handle, platform, followers, mobile, outlet, member_role AS role, all_profiles AS "allProfiles", status, joined::text AS joined FROM members ORDER BY name',
   events:
-    'SELECT id, title, brand, venue, date::text AS \"date\", end_date::text AS \"endDate\", time, end_time AS \"endTime\", gates_open_time AS \"gatesOpenTime\", area, category, tracks, capacity, confirmed, ticket_price AS \"ticketPrice\", ticket_currency AS \"ticketCurrency\", ticket_url AS \"ticketUrl\", reservation_phone AS \"reservationPhone\", creator_pass_note AS \"creatorPassNote\", creator_pass_form_url AS \"creatorPassFormUrl\", creator_pass_form_error AS \"creatorPassFormError\", age_restriction AS \"ageRestriction\", hashtag, application_deadline::text AS \"applicationDeadline\", action_label AS \"actionLabel\", dress_code AS \"dressCode\", about, included, who_is_invited AS \"whoIsInvited\", host_note AS \"hostNote\", COALESCE(image_gallery[1], image_data) AS \"imageData\", image_gallery AS \"imageGallery\", video_url AS \"videoUrl\", video_gallery AS \"videoUrlList\", track_capacities AS \"trackCapacities\", influencer_deliverables AS \"influencerDeliverables\", map_url AS \"mapUrl\", latest_event AS \"latestEvent\", top_pick AS \"topPick\", scheduled_publish_at AS \"scheduledPublishAt\", (SELECT COUNT(*)::int FROM event_rsvp_requests r WHERE r.event_id = events.id AND r.status = \'pending\') AS \"pendingRsvpCount\", status FROM events ORDER BY date',
+    'SELECT id, title, brand, venue, date::text AS \"date\", end_date::text AS \"endDate\", time, end_time AS \"endTime\", gates_open_time AS \"gatesOpenTime\", area, category, tracks, capacity, confirmed, ticket_price AS \"ticketPrice\", ticket_currency AS \"ticketCurrency\", ticket_url AS \"ticketUrl\", reservation_phone AS \"reservationPhone\", creator_pass_note AS \"creatorPassNote\", creator_pass_form_url AS \"creatorPassFormUrl\", creator_pass_form_error AS \"creatorPassFormError\", age_restriction AS \"ageRestriction\", hashtag, application_deadline::text AS \"applicationDeadline\", action_label AS \"actionLabel\", dress_code AS \"dressCode\", about, included, who_is_invited AS \"whoIsInvited\", host_note AS \"hostNote\", COALESCE(image_gallery[1], image_data) AS \"imageData\", image_gallery AS \"imageGallery\", video_url AS \"videoUrl\", video_gallery AS \"videoUrlList\", track_capacities AS \"trackCapacities\", influencer_deliverables AS \"influencerDeliverables\", map_url AS \"mapUrl\", latest_event AS \"latestEvent\", top_pick AS \"topPick\", scheduled_publish_at AS \"scheduledPublishAt\", (SELECT COUNT(*)::int FROM event_rsvp_requests r WHERE r.event_id = events.id AND r.status = \'pending\') AS \"pendingRsvpCount\", (SELECT COUNT(*)::int FROM event_ticket_inquiries i WHERE i.event_id = events.id AND i.request_type = \'creator_pass\' AND i.status = \'pending\') AS \"pendingCreatorPassCount\", CASE WHEN status = \'published\' AND COALESCE(end_date, date) < (NOW() AT TIME ZONE \'Asia/Dubai\')::date THEN \'closed\' ELSE status END AS status FROM events ORDER BY date',
   wall_posts:
     'SELECT id, brand, type, body, posted, boosted, status, event_id AS "eventId" FROM wall_posts ORDER BY created_at DESC',
   site_media:
@@ -1141,13 +1142,14 @@ app.post("/api/integrations/google-forms/creator-pass", async (req, res, next) =
       return res.status(400).json({ error: "A name and valid international phone number are required." });
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       return res.status(400).json({ error: "Enter a valid email address." });
-    const events = await sql`SELECT id FROM events WHERE id = ${eventId} AND status = 'published' AND (date IS NULL OR date >= (NOW() AT TIME ZONE 'Asia/Dubai')::date) AND (application_deadline IS NULL OR application_deadline >= (NOW() AT TIME ZONE 'Asia/Dubai')::date) LIMIT 1`;
-    if (!events[0]) return res.status(400).json({ error: "This event is not accepting creator pass requests." });
+    const events = await sql`SELECT id, title, date::text AS date, time, venue, area FROM events WHERE id = ${eventId} AND status = 'published' AND (date IS NULL OR date >= (NOW() AT TIME ZONE 'Asia/Dubai')::date) AND (application_deadline IS NULL OR application_deadline >= (NOW() AT TIME ZONE 'Asia/Dubai')::date) LIMIT 1`;
+    if (!events[0]) return res.status(400).json({ error: "This event is no longer accepting creator pass requests. The form may still be open; contact the RSVP DXB team." });
     const recent = await sql`SELECT id FROM event_ticket_inquiries WHERE event_id = ${eventId} AND phone = ${phone} AND request_type = 'creator_pass' AND status IN ('pending', 'accepted', 'waitlisted') LIMIT 1`;
     if (recent[0]) return res.json({ received: true, duplicate: true });
     const id = `google-form-${randomBytes(16).toString("hex")}`;
     await sql`INSERT INTO event_ticket_inquiries (id, event_id, full_name, email, phone, request_type, instagram_handle, instagram_followers, creator_address) VALUES (${id}, ${eventId}, ${name}, ${email}, ${phone}, 'creator_pass', ${instagramHandle}, ${instagramFollowers}, ${creatorAddress})`;
-    res.status(201).json({ received: true });
+    const delivery = await sendCreatorPassReceivedEmail({ name, email, event: events[0] });
+    res.status(201).json({ received: true, delivery });
   } catch (error) { next(error); }
 });
 
@@ -1165,7 +1167,6 @@ app.get("/api/integrations/google-forms/creator-pass/events", async (req, res, n
       SELECT id, title, date::text AS date, venue
       FROM events
       WHERE status = 'published'
-        AND creator_pass_note <> ''
         AND (date IS NULL OR date >= (NOW() AT TIME ZONE 'Asia/Dubai')::date)
         AND (application_deadline IS NULL OR application_deadline >= (NOW() AT TIME ZONE 'Asia/Dubai')::date)
       ORDER BY date NULLS LAST, title
@@ -2089,6 +2090,40 @@ app.get("/api/event-ticket-inquiries", async (req, res, next) => {
       ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'contacted' THEN 1 ELSE 2 END, created_at DESC
     `;
     res.json(rows);
+  } catch (error) { next(error); }
+});
+
+app.get("/api/enquiries", async (req, res, next) => {
+  try {
+    if (!(await currentAdmin(req))) return res.status(401).json({ error: "Sign in to view website enquiries." });
+    if (!sql) return res.json([]);
+    const rows = await sql`
+      SELECT id, kind, name, contact, payload AS details, status, created_at AS "createdAt"
+      FROM public_enquiries ORDER BY created_at DESC LIMIT 500
+    `;
+    res.json(rows);
+  } catch (error) { next(error); }
+});
+
+app.patch("/api/enquiries/:id", async (req, res, next) => {
+  try {
+    if (!(await currentAdmin(req))) return res.status(401).json({ error: "Sign in to update website enquiries." });
+    const status = String(req.body.status || "");
+    if (!["new", "contacted", "closed"].includes(status)) return res.status(400).json({ error: "Choose a valid enquiry status." });
+    if (!sql) return res.status(404).json({ error: "Enquiry not found." });
+    const rows = await sql`UPDATE public_enquiries SET status = ${status} WHERE id = ${req.params.id} RETURNING id, status`;
+    if (!rows[0]) return res.status(404).json({ error: "Enquiry not found." });
+    res.json(rows[0]);
+  } catch (error) { next(error); }
+});
+
+app.delete("/api/enquiries/:id", async (req, res, next) => {
+  try {
+    if (!(await currentAdmin(req))) return res.status(401).json({ error: "Sign in to delete website enquiries." });
+    if (!sql) return res.status(404).json({ error: "Enquiry not found." });
+    const rows = await sql`DELETE FROM public_enquiries WHERE id = ${req.params.id} RETURNING id`;
+    if (!rows[0]) return res.status(404).json({ error: "Enquiry not found." });
+    res.json({ deleted: true });
   } catch (error) { next(error); }
 });
 

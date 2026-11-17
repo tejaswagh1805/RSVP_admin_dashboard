@@ -60,3 +60,7 @@ INSERT INTO guests (id, name, track, event_id, plus_ones, code, status) VALUES
 ('g4', 'Nadia Khan', 'Creators', 'marina-sunset-session', 2, 'RSVP-7731', 'confirmed'),
 ('g5', 'Jon Abela', 'Media', 'marina-sunset-session', 0, 'RSVP-5520', 'confirmed')
 ON CONFLICT (id) DO NOTHING;
+
+-- The workbook identifies these seeded wall posts and client accounts as demo data.
+DELETE FROM wall_posts WHERE id IN ('w1', 'w2', 'w3', 'w4', 'w5');
+DELETE FROM clients WHERE id IN ('b1', 'b2', 'b3', 'b4', 'b5');

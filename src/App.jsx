@@ -18,6 +18,7 @@ import WebsiteMedia from './pages/WebsiteMedia.jsx';
 import PeopleProfiles from './pages/PeopleProfiles.jsx';
 import Venues from './pages/Venues.jsx';
 import Newsletter from './pages/Newsletter.jsx';
+import Enquiries from './pages/Enquiries.jsx';
 
 export default function App() {
   const [page, setPage] = useState(() => location.hash.replace('#/', '') || 'dashboard');
@@ -124,7 +125,7 @@ export default function App() {
   };
   const pending = data.applications.filter((item) => item.status === 'pending').length;
   const pages = {
-    dashboard: <Dashboard data={data} navigate={navigate} />,
+    dashboard: <Dashboard data={data} navigate={navigate} admin={admin} />,
     applications: <Applications rows={data.applications} query={search} setQuery={setSearch} act={act} />,
     members: <Members rows={data.members} query={search} setQuery={setSearch} act={act} />,
       events: <Events rows={data.events} guests={data.guests} act={act} openModal={setModal} />,
@@ -132,6 +133,7 @@ export default function App() {
     peopleProfiles: <PeopleProfiles rows={data.peopleProfiles} act={act} />,
     venues: <Venues rows={data.venues} act={act} />,
     newsletter: <Newsletter />,
+    enquiries: <Enquiries act={act} />,
     invitations: <Invitations events={data.events} />,
     wall: <Wall rows={data.wall} act={act} />,
     clients: <Clients rows={data.clients} act={act} />,

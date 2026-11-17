@@ -261,6 +261,31 @@ export async function sendCreatorPassDecisionEmail({ name, email, event, status,
   }
 }
 
+export async function sendCreatorPassReceivedEmail({ name, email, event }) {
+  if (!email) return { status: "skipped", message: "No email address was provided." };
+  const region = String(process.env.SES_REGION || process.env.AWS_REGION || "").trim();
+  const from = String(process.env.SES_FROM_EMAIL || "").trim() || "RSVP DXB <vinitahirani@rsvpdxb.com>";
+  if (!region || !from) return { status: "not_configured", message: "Request saved, but receipt email is not configured (SES_REGION / AWS_REGION)." };
+
+  const safeName = htmlEscape(name || "there");
+  const safeTitle = htmlEscape(event.title || "your event");
+  const details = invitationEventDetails(event);
+  const subject = `We received your creator pass request · ${event.title || "RSVP DXB"}`;
+  const text = `Hello ${name || "there"},\n\nWe received your creator pass request for ${event.title || "the event"}.\n\n${details}\n\nThe RSVP DXB team will review your request and email you with an update.\n\nWarm regards,\nThe RSVP DXB team`;
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:28px 14px;background:#f3e3cb;color:#2e1c10;font-family:Arial,Helvetica,sans-serif"><main style="max-width:560px;margin:0 auto;padding:32px;background:#fbf3e7;border:1px solid #ddc5a3;border-radius:16px"><p style="margin:0 0 20px;color:#9a6a32;font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase">RSVP DXB · Creator pass</p><h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-size:30px;font-weight:normal">Request received</h1><p>Hello ${safeName},</p><p>We received your creator pass request for <strong>${safeTitle}</strong>.</p><p style="color:#725b45;line-height:1.6">${htmlEscape(details)}</p><p>The RSVP DXB team will review your request and email you with an update.</p><p style="margin:26px 0 0;color:#725b45">Warm regards,<br><strong>The RSVP DXB team</strong></p></main></body></html>`;
+  try {
+    const ses = new SESClient({ region });
+    await ses.send(new SendEmailCommand({
+      Source: from,
+      Destination: { ToAddresses: [email] },
+      Message: { Subject: { Charset: "UTF-8", Data: subject }, Body: { Text: { Charset: "UTF-8", Data: text }, Html: { Charset: "UTF-8", Data: html } } },
+    }));
+    return { status: "submitted", message: "Request receipt accepted by Amazon SES; inbox delivery is not confirmed." };
+  } catch (error) {
+    return { status: "failed", message: String(error?.message || "Could not send the request receipt through Amazon SES.").slice(0, 240) };
+  }
+}
+
 const normalizeWhatsAppNumber = (phone) => {
   let digits = String(phone || "").replace(/\D/g, "");
   if (digits.startsWith("00")) digits = digits.slice(2);

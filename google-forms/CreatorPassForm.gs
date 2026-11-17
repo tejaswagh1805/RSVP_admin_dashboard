@@ -1,8 +1,10 @@
-// Connect one separately branded Google Form per event to the admin queue.
+// LEGACY manual connector: it only forwards forms listed in eventForms below.
+// It does not provision forms for current or future events. For the all-events
+// workflow, deploy create-event-creator-pass-form.gs as the admin's Apps Script
+// web app; the admin creates and links one public form for each published event.
 const CREATOR_PASS_FORM_CONFIG = {
   webhookUrl: "https://admin.rsvpdxb.com/api/integrations/google-forms/creator-pass",
-  // Add each event's Google Form ID here after creating/copying its form.
-  // Keep the existing PATAAKHA form assigned to PATAAKHA only.
+  // Existing manually-created forms only. New events are not added here.
   eventForms: {
     "client-pataakha-2026": "1VvAsWM2fEU_4NILdJvtKy0D4cPkzTRbG9ODfe7bTwcM",
   },
