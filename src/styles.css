@@ -756,3 +756,118 @@ body:has(.signin-screen) { overflow: auto; }
 .message-log>strong { color:#dfc58d; font-size:12px; }
 .message-log p { display:flex; justify-content:space-between; gap:10px; margin:0; padding:6px 0; border-top:1px solid #ffffff10; }
 .message-log small { color:#a8a092; white-space:nowrap; }
+
+/* Site-wide responsive safeguards. Keep these overrides last so every admin
+   screen shares the same narrow-screen behavior without changing desktop. */
+html { min-width: 320px; width: 100%; }
+body { width: 100%; min-width: 320px; overflow-x: hidden; }
+.app-shell, .main-column, .content-wrap, #root { min-width: 0; max-width: 100%; }
+.main-column { width: auto; }
+img, video, canvas, svg { max-width: 100%; }
+.page-heading > *, .heading-actions, .section-intro > *, .toolbar > *, .topbar-left, .topbar-actions { min-width: 0; }
+.table-scroll, .review-rsvp-panel { max-width: 100%; overscroll-behavior-x: contain; }
+.button, .small-action, .icon-button, .nav-item, .filter-tabs button, .event-filter button { touch-action: manipulation; }
+.field input, .field select, .field textarea, input, select, textarea { max-width: 100%; }
+.field input:not([type="checkbox"]):not([type="radio"]), .field select, .field textarea { min-width: 0; }
+.modal-backdrop { padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+.modal-card { min-width: 0; max-width: 100%; max-height: calc(100dvh - 20px); }
+.modal-header, .modal-footer { flex-wrap: wrap; }
+
+@media (max-width: 1024px) {
+  .sidebar { z-index: 51; width: min(290px, 86vw); transform: translateX(-105%); transition: transform .22s ease; box-shadow: 15px 0 55px #0007; }
+  .sidebar.sidebar-open { transform: translateX(0); }
+  .sidebar-close { display: inline-grid !important; }
+  .main-column { margin-left: 0; }
+  .scrim { position: fixed; z-index: 50; inset: 0; display: block; border: 0; background: #0008; }
+  .mobile-menu { display: inline-grid; }
+  .topbar { padding-right: 20px; padding-left: 20px; }
+  .content-wrap { padding-right: 20px; padding-left: 20px; }
+  .member-stat-grid, .door-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .member-accordion-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .door-grid { grid-template-columns: minmax(0, 1fr); }
+  .package-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .event-admin-card { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .event-admin-details { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .event-admin-actions { grid-column: auto; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 780px) {
+  .topbar { height: auto; min-height: 57px; gap: 8px; padding: 8px 14px; }
+  .topbar-left { flex: 1 1 auto; gap: 7px; }
+  .topbar-actions { flex: 0 1 auto; gap: 5px; }
+  .breadcrumbs { max-width: 34vw; overflow: hidden; white-space: nowrap; }
+  .breadcrumbs strong { overflow: hidden; text-overflow: ellipsis; }
+  .search-box:not(.guest-search) { width: clamp(100px, 30vw, 190px); }
+  .search-box kbd, .theme-button, .breadcrumbs > span, .breadcrumbs > svg { display: none; }
+  .content-wrap { padding: 22px 16px 36px; }
+  .page-heading { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+  .page-heading h1 { font-size: clamp(30px, 7vw, 36px); line-height: 1.05; overflow-wrap: anywhere; }
+  .heading-actions { flex-wrap: wrap; }
+  .toolbar, .section-intro, .welcome-line { align-items: flex-start; flex-wrap: wrap; }
+  .toolbar { gap: 9px; }
+  .toolbar-total { margin-left: 0; }
+  .filter-tabs, .event-filter { max-width: 100%; flex-wrap: wrap; }
+  .section-search { width: min(100%, 280px); }
+  .dashboard-grid { grid-template-columns: minmax(0, 1fr); }
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .attention-list { grid-template-columns: minmax(0, 1fr); }
+  .venue-admin-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .invitation-form, .form-grid, .venue-form-grid, .register-grid { grid-template-columns: minmax(0, 1fr); }
+  .form-grid > *, .venue-form-grid > *, .register-grid > * { min-width: 0; }
+  .modal-card { width: 100%; max-height: calc(100dvh - 20px); }
+  .modal-body { min-height: 0; overflow: auto; padding: 15px; }
+  .review-rsvp-panel table { min-width: 980px; }
+}
+
+@media (max-width: 560px) {
+  .topbar { padding: 7px 10px; }
+  .topbar-actions { gap: 3px; }
+  .search-box:not(.guest-search) { width: clamp(88px, 29vw, 135px); gap: 5px; padding: 0 7px; }
+  .search-box:not(.guest-search) input { font-size: 10px; }
+  .topbar-divider { display: none; }
+  .content-wrap { padding: 19px 12px 30px; }
+  .page-heading h1 { font-size: clamp(27px, 8vw, 34px); }
+  .heading-actions, .heading-actions > .button { width: 100%; }
+  .stats-grid, .member-stat-grid, .door-stats, .member-accordion-grid,
+  .member-profile-stats, .package-grid, .venue-admin-grid,
+  .event-admin-details, .event-admin-actions { grid-template-columns: minmax(0, 1fr); }
+  .event-admin-actions { display: grid; }
+  .event-admin-image { width: 54px; height: 66px; }
+  .application-card { padding: 11px; gap: 9px; }
+  .application-actions { width: 100%; margin-left: 0; }
+  .application-actions > * { flex: 1 1 auto; }
+  .panel, .queue-panel, .attention-panel, .live-events-panel { min-width: 0; }
+  .panel { overflow-wrap: anywhere; }
+  .table-scroll table { min-width: max-content; }
+  .review-toolbar { align-items: stretch; }
+  .review-toolbar select, .review-toolbar .small-action { flex: 1 1 100%; width: 100%; }
+  .modal-backdrop { padding: 6px; }
+  .modal-card { max-height: calc(100dvh - 12px); border-radius: 9px; }
+  .modal-header { gap: 8px; padding: 13px 15px; }
+  .modal-footer { gap: 8px; padding: 12px 15px; }
+  .modal-footer > * { flex: 1 1 auto; }
+  .venue-admin-form { padding: 15px 12px; }
+  .venue-admin-form-heading h2, .venue-list-heading h2 { font-size: 28px; }
+  .venue-form-preview { width: 100%; max-width: 260px; }
+  .venue-form-actions, .venue-form-actions .button { width: 100%; }
+  .door-side { grid-template-columns: minmax(0, 1fr); }
+  .walkin-form { grid-template-columns: minmax(0, 1fr) 78px; }
+  .message-log p { align-items: flex-start; flex-direction: column; gap: 3px; }
+}
+
+@media (max-width: 360px) {
+  .topbar { gap: 4px; padding-right: 7px; padding-left: 7px; }
+  .topbar-actions { gap: 1px; }
+  .search-box:not(.guest-search) { width: 82px; }
+  .search-box:not(.guest-search) input::placeholder { color: transparent; }
+  .content-wrap { padding-right: 9px; padding-left: 9px; }
+  .signin-card, .register-card { padding-right: 13px; padding-left: 13px; }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .sidebar { padding-top: 12px; padding-bottom: 8px; }
+  .brand-lockup { padding-bottom: 10px; }
+  .side-nav { padding-top: 12px; }
+  .nav-section { margin-bottom: 13px; }
+  .modal-card { max-height: calc(100dvh - 12px); }
+}
