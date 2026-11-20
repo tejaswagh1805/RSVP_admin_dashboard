@@ -2896,14 +2896,13 @@ app.patch("/api/events/:id", async (req, res, next) => {
         if (value && item.status !== "published" && item.status !== "closed") return res.status(400).json({ error: `Publish the event before adding it to ${label}.` });
         if (key === "topPick") {
           item.topPick = value;
-          item.latestEvent = !value;
         } else item[key] = value;
         return res.json(item);
       }
       let rows;
       try {
         rows = key === "topPick"
-          ? await sql`UPDATE events SET top_pick = ${value}, latest_event = ${!value}, updated_at = NOW() WHERE id = ${req.params.id} AND (${!value} OR status = 'published' OR status = 'closed') RETURNING id, top_pick AS "topPick", latest_event AS "latestEvent"`
+          ? await sql`UPDATE events SET top_pick = ${value}, updated_at = NOW() WHERE id = ${req.params.id} AND (${!value} OR status = 'published' OR status = 'closed') RETURNING id, top_pick AS "topPick", latest_event AS "latestEvent"`
           : await sql`UPDATE events SET latest_event = ${value}, updated_at = NOW() WHERE id = ${req.params.id} AND (${!value} OR status = 'published' OR status = 'closed') RETURNING id, latest_event AS "latestEvent"`;
       } catch (error) {
         const message = String(error?.message || "").toLowerCase();
