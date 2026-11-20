@@ -2893,7 +2893,7 @@ app.patch("/api/events/:id", async (req, res, next) => {
       if (!sql) {
         const item = demo.events.find((row) => row.id === req.params.id);
         if (!item) return res.status(404).json({ error: "Event not found." });
-        if (value && item.status !== "published") return res.status(400).json({ error: `Publish the event before adding it to ${label}.` });
+        if (value && item.status !== "published" && item.status !== "closed") return res.status(400).json({ error: `Publish the event before adding it to ${label}.` });
         if (key === "topPick") {
           item.topPick = value;
           item.latestEvent = !value;
@@ -2903,8 +2903,8 @@ app.patch("/api/events/:id", async (req, res, next) => {
       let rows;
       try {
         rows = key === "topPick"
-          ? await sql`UPDATE events SET top_pick = ${value}, latest_event = ${!value}, updated_at = NOW() WHERE id = ${req.params.id} AND (${!value} OR status = 'published') RETURNING id, top_pick AS "topPick", latest_event AS "latestEvent"`
-          : await sql`UPDATE events SET latest_event = ${value}, updated_at = NOW() WHERE id = ${req.params.id} AND (${!value} OR status = 'published') RETURNING id, latest_event AS "latestEvent"`;
+          ? await sql`UPDATE events SET top_pick = ${value}, latest_event = ${!value}, updated_at = NOW() WHERE id = ${req.params.id} AND (${!value} OR status = 'published' OR status = 'closed') RETURNING id, top_pick AS "topPick", latest_event AS "latestEvent"`
+          : await sql`UPDATE events SET latest_event = ${value}, updated_at = NOW() WHERE id = ${req.params.id} AND (${!value} OR status = 'published' OR status = 'closed') RETURNING id, latest_event AS "latestEvent"`;
       } catch (error) {
         const message = String(error?.message || "").toLowerCase();
         if (message.includes(homepageFlag.column) && message.includes("does not exist")) return res.status(503).json({ error: `${label} are not enabled in this database yet. Apply the events section migration, then retry.` });
