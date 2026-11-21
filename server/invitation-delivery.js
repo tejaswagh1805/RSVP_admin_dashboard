@@ -9,6 +9,17 @@ const htmlEscape = (value) =>
     "'": "&#39;",
   })[character]);
 
+const emailParagraphs = (value) => String(value ?? "").split(/\n{2,}/).map((paragraph) =>
+  `<p style="margin:0 0 16px;color:#55483b;font-size:15px;line-height:1.8">${htmlEscape(paragraph).replace(/\n/g, "<br>")}</p>`,
+).join("");
+
+const emailButton = (label, url) => `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:26px 0 8px"><tr><td align="center" bgcolor="#85501f" style="border-radius:8px"><a href="${htmlEscape(url)}" style="display:inline-block;padding:14px 23px;border:1px solid #85501f;border-radius:8px;color:#fffaf1;font-size:14px;font-weight:bold;line-height:1.2;text-decoration:none">${htmlEscape(label)} &nbsp; &#8594;</a></td></tr></table>`;
+
+function brandedEmail({ eyebrow, title, greeting, body, preheader = "A note from RSVP DXB", actionLabel, actionUrl, footer = "Warm regards, The RSVP DXB team" }) {
+  const content = typeof body === "string" ? emailParagraphs(body) : body;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="x-apple-disable-message-reformatting"><title>${htmlEscape(title)}</title></head><body style="margin:0;padding:0;background:#f4ead9;color:#2e1c10;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${htmlEscape(preheader)}&nbsp; &zwnj;&nbsp; &zwnj;&nbsp; &zwnj;</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f4ead9"><tr><td align="center" style="padding:28px 14px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:620px;background:#fffaf1;border:1px solid #e5d3b8;border-radius:16px;overflow:hidden"><tr><td style="padding:24px 32px;background:#2e1c10"><div style="font-family:Georgia,'Times New Roman',serif;color:#e8c78d;font-size:24px;letter-spacing:3px">RSVP DXB</div><div style="margin-top:6px;color:#ddc9aa;font-size:10px;letter-spacing:2px;text-transform:uppercase">Private events &nbsp;·&nbsp; Dubai</div></td></tr><tr><td style="height:4px;background:#a66a2d;font-size:0;line-height:0">&nbsp;</td></tr><tr><td style="padding:34px 32px 32px"><p style="margin:0 0 10px;color:#96602b;font-size:10px;font-weight:bold;letter-spacing:2px;text-transform:uppercase">${htmlEscape(eyebrow)}</p><h1 style="margin:0 0 22px;color:#2e1c10;font-family:Georgia,'Times New Roman',serif;font-size:32px;font-weight:normal;line-height:1.2">${htmlEscape(title)}</h1><p style="margin:0 0 16px;color:#34271d;font-size:16px;line-height:1.65">${htmlEscape(greeting)}</p>${content}${actionLabel && actionUrl ? emailButton(actionLabel, actionUrl) : ""}<p style="margin:26px 0 0;color:#725b45;font-size:14px;line-height:1.7">${htmlEscape(footer).replace(/\n/g, "<br>")}</p></td></tr><tr><td style="padding:17px 32px;background:#f8f1e6;border-top:1px solid #eadcc7;color:#8a7965;font-size:11px;line-height:1.6">A considered guest list. A city worth showing up for.<br><span style="color:#a89986">RSVP DXB &nbsp;·&nbsp; Dubai, United Arab Emirates</span></td></tr></table></td></tr></table></body></html>`;
+}
+
 const eventDateLabel = (date) => {
   const value = String(date ?? "").slice(0, 10);
   const parsed = /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -66,12 +77,8 @@ export async function sendInvitationEmail({ guestName, email, event, invitationU
     "We look forward to seeing you.",
     "RSVP DXB",
   ].filter((line) => line !== "").join("\n");
-  const safeGuest = htmlEscape(guestName);
-  const safeTitle = htmlEscape(title);
-  const safeDetails = htmlEscape(details);
-  const safeTableLine = tableLine ? `<p>${htmlEscape(tableLine)}</p>` : "";
-  const safeUrl = htmlEscape(invitationUrl);
-  const html = `<!doctype html><html><body style="margin:0;background:#f3e3cb;color:#2e1c10;font-family:Arial,sans-serif"><main style="max-width:560px;margin:32px auto;padding:36px 28px;background:#fbf3e7;border:1px solid #d2b995;border-radius:12px"><p style="color:#86501f;font-size:12px;letter-spacing:2px;text-transform:uppercase">RSVP DXB</p><h1 style="font-size:28px;font-weight:500">You are invited, ${safeGuest}</h1><p>We would love to welcome you to <strong>${safeTitle}</strong>.</p><p>${safeDetails}</p>${safeTableLine}<p style="margin:28px 0"><a href="${safeUrl}" style="display:inline-block;padding:13px 22px;border-radius:10px;background:#86501f;color:#fff6e9;text-decoration:none">View your invitation</a></p><p style="font-size:12px;color:#705238">We look forward to seeing you.<br />RSVP DXB</p></main></body></html>`;
+  const invitationDetails = `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:8px 0 20px;background:#f8f0e3;border:1px solid #ead8bd;border-radius:10px"><tr><td style="padding:17px 19px"><p style="margin:0 0 6px;color:#96602b;font-size:10px;font-weight:bold;letter-spacing:1.8px;text-transform:uppercase">Your invitation</p><p style="margin:0;color:#2e1c10;font-family:Georgia,'Times New Roman',serif;font-size:20px;line-height:1.35">${htmlEscape(title)}</p><p style="margin:8px 0 0;color:#725b45;font-size:13px;line-height:1.6">${htmlEscape(details)}${tableLine ? `<br>${htmlEscape(tableLine)}` : ""}</p></td></tr></table>`;
+  const html = brandedEmail({ eyebrow: "A place has been saved for you", title: "You're invited.", greeting: `Dear ${guestName},`, body: `<p style="margin:0 0 8px;color:#55483b;font-size:15px;line-height:1.8">We would love to welcome you to this RSVP DXB gathering.</p>${invitationDetails}`, preheader: `Your invitation to ${title}`, actionLabel: "View your invitation", actionUrl: invitationUrl, footer: "We look forward to seeing you.\nTeam RSVP DXB" });
 
   try {
     const ses = new SESClient({ region });
@@ -109,7 +116,6 @@ export async function sendMembershipApprovalEmail({ name, email }) {
       message: "Member approved, but email delivery is not configured (SES_REGION / AWS_REGION).",
     };
 
-  const safeName = htmlEscape(name || "there");
   const siteUrl = String(process.env.PUBLIC_SITE_URL || "https://rsvpdxb.com").replace(/\/$/, "");
   const signInUrl = `${siteUrl}/signin`;
   const subject = "You're in. Welcome to RSVP DXB.";
@@ -125,7 +131,7 @@ export async function sendMembershipApprovalEmail({ name, email }) {
     "",
     "Team RSVP DXB",
   ].join("\n");
-  const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head><body style="margin:0;padding:24px 12px;background:#f3e3cb;color:#2e1c10;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%"><div style="display:none;max-height:0;overflow:hidden;opacity:0">The door's open.</div><main style="max-width:580px;margin:0 auto;background:#fbf3e7;border:1px solid #d2b995;border-radius:16px;overflow:hidden"><header style="padding:26px 30px;background:#211b17"><div style="font-family:Georgia,'Times New Roman',serif;color:#d6b47a;font-size:25px;letter-spacing:2px;font-weight:700">RSVP DXB</div><div style="margin-top:5px;color:#c5b9a9;font-size:10px;letter-spacing:2px;text-transform:uppercase">Private events · Dubai</div></header><div style="height:4px;background:#80512f"></div><section style="padding:34px 30px 30px"><div style="display:inline-block;padding:7px 12px;border-radius:999px;background:#f0dfc2;color:#80512f;font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:700">Membership approved</div><h1 style="margin:18px 0 16px;font-family:Georgia,'Times New Roman',serif;font-size:32px;line-height:1.2;font-weight:500;color:#261d17">You're in. Welcome to RSVP DXB.</h1><p style="margin:0 0 14px;font-size:16px;line-height:1.7">Hi ${safeName},</p><p style="margin:0;color:#544a42;font-size:15px;line-height:1.75">Consider this your invitation. You can now browse events, request tickets and wishlist private dinners.</p><p style="margin:26px 0 8px"><a href="${htmlEscape(signInUrl)}" style="display:inline-block;padding:14px 23px;border-radius:8px;background:#80512f;color:#fff;text-decoration:none;font-size:15px;font-weight:700">Enter the Inner Circle&nbsp; →</a></p><p style="margin:24px 0 0;color:#544a42;font-size:14px;line-height:1.7"><strong style="color:#2d241d">Team RSVP DXB</strong></p></section><footer style="padding:18px 30px;background:#f7efe4;border-top:1px solid #eee1d0;color:#82776d;font-size:11px;line-height:1.65">You received this message because your RSVP DXB membership application was approved.<br><span style="color:#a0978e">© RSVP DXB · Dubai, UAE</span></footer></main></body></html>`;
+  const html = brandedEmail({ eyebrow: "Membership approved", title: "You're in. Welcome to RSVP DXB.", greeting: `Hi ${name || "there"},`, body: "Consider this your invitation. You can now browse events, request tickets and wishlist private dinners.", preheader: "The door's open.", actionLabel: "Enter the Inner Circle", actionUrl: signInUrl, footer: "Your membership is active.\nTeam RSVP DXB" });
 
   try {
     const ses = new SESClient({ region });
@@ -154,11 +160,9 @@ export async function sendMemberActivationEmail({ name, email, activationUrl }) 
   const region = String(process.env.SES_REGION || process.env.AWS_REGION || "").trim();
   const from = String(process.env.SES_FROM_EMAIL || "").trim() || "RSVP DXB <vinitahirani@rsvpdxb.com>";
   if (!region) return { status: "not_configured", message: "Member approved, but account setup email is not configured." };
-  const safeName = htmlEscape(name || "there");
-  const safeUrl = htmlEscape(activationUrl);
   const subject = "Your RSVP DXB application is approved — set up your account";
   const text = `Hi ${name || "there"},\n\nYour RSVP DXB application is approved. Create your password using this one-time link, which expires in 30 minutes:\n\n${activationUrl}\n\nAfter setting your password, sign in with this email address.\n\nTeam RSVP DXB`;
-  const html = `<!doctype html><html><body style="margin:0;background:#f3e3cb;color:#2e1c10;font-family:Arial,sans-serif"><main style="max-width:560px;margin:32px auto;padding:36px 28px;background:#fbf3e7;border:1px solid #d2b995;border-radius:12px"><p style="color:#86501f;font-size:12px;letter-spacing:2px;text-transform:uppercase">RSVP DXB</p><h1 style="font-size:28px;font-weight:500">Your application is approved</h1><p>Hello ${safeName},</p><p>Your RSVP DXB application is approved. Set a password to activate your new account. This one-time link expires in 30 minutes.</p><p style="margin:28px 0"><a href="${safeUrl}" style="display:inline-block;padding:13px 22px;border-radius:10px;background:#86501f;color:#fff6e9;text-decoration:none">Set your password</a></p><p>After setup, sign in with this email address.</p><p style="font-size:12px;color:#705238">Team RSVP DXB</p></main></body></html>`;
+  const html = brandedEmail({ eyebrow: "Membership approved", title: "Your next step starts here.", greeting: `Hello ${name || "there"},`, body: "Your RSVP DXB application is approved. Set a password to activate your new account. This one-time link expires in 30 minutes. After setup, sign in with this email address.", preheader: "Your application is approved. Set up your member account.", actionLabel: "Set your password", actionUrl: activationUrl, footer: "If you did not expect this email, contact RSVP DXB support." });
   try {
     const ses = new SESClient({ region });
     await ses.send(new SendEmailCommand({ Source: from, Destination: { ToAddresses: [email] }, Message: {
@@ -197,12 +201,16 @@ export async function sendRsvpDecisionEmail({ name, email, event, track, guestNa
   } else {
     return { status: "skipped", message: "This RSVP status does not send a decision email." };
   }
-  const safeName = htmlEscape(name || "there");
-  const safeTitle = htmlEscape(title);
   if (String(customMessage).trim()) message = String(customMessage).slice(0, 10000);
   else if (String(personalLine).trim()) message += `\n\n${String(personalLine).slice(0, 2000)}`;
-  const safeMessage = htmlEscape(message).replaceAll("\n", "<br />");
-  const html = `<!doctype html><html><body style="margin:0;background:#f3e3cb;color:#2e1c10;font-family:Arial,sans-serif"><main style="max-width:560px;margin:32px auto;padding:36px 28px;background:#fbf3e7;border:1px solid #d2b995;border-radius:12px"><p style="color:#86501f;font-size:12px;letter-spacing:2px;text-transform:uppercase">RSVP DXB</p><h1 style="font-size:28px;font-weight:500">${safeTitle}</h1><p>Hello ${safeName},</p><p style="line-height:1.7">${safeMessage}</p><p style="font-size:12px;color:#705238">Warm regards,<br />The RSVP DXB team</p></main></body></html>`;
+  // Admin-written copy may include its own greeting/sign-off. The template adds those once.
+  message = message
+    .replace(/^\s*(?:hi|hello|dear)\s+[^,\n]+,?\s*\n+/i, "")
+    .replace(/\n+\s*(?:warm regards|kind regards|regards|best|with warmth|warmly|best wishes),?\s*\n+\s*(?:the\s+)?rsvp dxb team\s*$/i, "")
+    .trim();
+  const statusLabel = status === "accepted" ? "RSVP confirmed" : status === "declined" ? "RSVP update" : "RSVP waitlist";
+  const eventCard = `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:8px 0 20px;background:#f8f0e3;border:1px solid #ead8bd;border-radius:10px"><tr><td style="padding:17px 19px"><p style="margin:0 0 6px;color:#96602b;font-size:10px;font-weight:bold;letter-spacing:1.8px;text-transform:uppercase">Event details</p><p style="margin:0;color:#2e1c10;font-family:Georgia,'Times New Roman',serif;font-size:20px;line-height:1.35">${htmlEscape(event.title)}</p><p style="margin:8px 0 0;color:#725b45;font-size:13px;line-height:1.6">${htmlEscape(eventDetails)}</p>${party ? `<p style="margin:7px 0 0;color:#725b45;font-size:13px;line-height:1.6"><strong>Party:</strong> ${htmlEscape(party)}</p>` : ""}</td></tr></table>`;
+  const html = brandedEmail({ eyebrow: statusLabel, title, greeting: `Hello ${name || "there"},`, body: `${emailParagraphs(message)}${eventCard}`, preheader: `${statusLabel}: ${event.title}`, footer: "Warm regards,\nThe RSVP DXB team" });
   try {
     const ses = new SESClient({ region });
     await ses.send(new SendEmailCommand({
@@ -268,12 +276,11 @@ export async function sendCreatorPassReceivedEmail({ name, email, event }) {
   const from = String(process.env.SES_FROM_EMAIL || "").trim() || "RSVP DXB <vinitahirani@rsvpdxb.com>";
   if (!region || !from) return { status: "not_configured", message: "Request saved, but receipt email is not configured (SES_REGION / AWS_REGION)." };
 
-  const safeName = htmlEscape(name || "there");
-  const safeTitle = htmlEscape(event.title || "your event");
   const details = invitationEventDetails(event);
   const subject = `We received your creator pass request · ${event.title || "RSVP DXB"}`;
   const text = `Hello ${name || "there"},\n\nWe received your creator pass request for ${event.title || "the event"}.\n\n${details}\n\nThe RSVP DXB team will review your request and email you with an update.\n\nWarm regards,\nThe RSVP DXB team`;
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:28px 14px;background:#f3e3cb;color:#2e1c10;font-family:Arial,Helvetica,sans-serif"><main style="max-width:560px;margin:0 auto;padding:32px;background:#fbf3e7;border:1px solid #ddc5a3;border-radius:16px"><p style="margin:0 0 20px;color:#9a6a32;font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase">RSVP DXB · Creator pass</p><h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-size:30px;font-weight:normal">Request received</h1><p>Hello ${safeName},</p><p>We received your creator pass request for <strong>${safeTitle}</strong>.</p><p style="color:#725b45;line-height:1.6">${htmlEscape(details)}</p><p>The RSVP DXB team will review your request and email you with an update.</p><p style="margin:26px 0 0;color:#725b45">Warm regards,<br><strong>The RSVP DXB team</strong></p></main></body></html>`;
+  const eventCard = `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:8px 0 20px;background:#f8f0e3;border:1px solid #ead8bd;border-radius:10px"><tr><td style="padding:17px 19px"><p style="margin:0 0 6px;color:#96602b;font-size:10px;font-weight:bold;letter-spacing:1.8px;text-transform:uppercase">Your event</p><p style="margin:0;color:#2e1c10;font-family:Georgia,'Times New Roman',serif;font-size:20px;line-height:1.35">${htmlEscape(event.title || "Your event")}</p><p style="margin:8px 0 0;color:#725b45;font-size:13px;line-height:1.6">${htmlEscape(details)}</p></td></tr></table>`;
+  const html = brandedEmail({ eyebrow: "Creator pass request", title: "Request received.", greeting: `Hello ${name || "there"},`, body: `We received your creator pass request. The RSVP DXB team will review it and email you with an update.${eventCard}`, preheader: `We received your creator pass request for ${event.title || "your event"}.`, footer: "Warm regards,\nThe RSVP DXB team" });
   try {
     const ses = new SESClient({ region });
     await ses.send(new SendEmailCommand({

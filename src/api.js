@@ -130,6 +130,8 @@ export const api = {
   eventRsvpRequests: (eventId) => request(`/event-rsvp-requests?eventId=${encodeURIComponent(eventId)}`),
   eventTicketInquiries: (eventId) => request(`/event-ticket-inquiries?eventId=${encodeURIComponent(eventId)}`),
   enquiries: () => request('/enquiries'),
+  venueEnquiryCounts: () => request('/venues/enquiry-counts'),
+  venueEnquiries: (venueId) => request(`/venues/${encodeURIComponent(venueId)}/enquiries`),
   updateEnquiry: (id, status) => request(`/enquiries/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   deleteEnquiry: (id) => request(`/enquiries/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   updateEventTicketInquiry: (id, status) => request(`/event-ticket-inquiries/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status }) }),

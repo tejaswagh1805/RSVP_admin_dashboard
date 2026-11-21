@@ -170,6 +170,9 @@ CREATE TABLE IF NOT EXISTS event_rsvp_requests (
 CREATE INDEX IF NOT EXISTS event_rsvp_requests_event_status_idx ON event_rsvp_requests(event_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS event_rsvp_requests_member_idx ON event_rsvp_requests(member_id, created_at DESC);
 ALTER TABLE event_rsvp_requests ADD COLUMN IF NOT EXISTS referral_code TEXT NOT NULL DEFAULT '';
+ALTER TABLE event_rsvp_requests ADD COLUMN IF NOT EXISTS task_status TEXT NOT NULL DEFAULT 'not_required';
+ALTER TABLE event_rsvp_requests ADD COLUMN IF NOT EXISTS task_submission TEXT;
+ALTER TABLE event_rsvp_requests ADD COLUMN IF NOT EXISTS task_submitted_at TIMESTAMPTZ;
 
 
 CREATE TABLE IF NOT EXISTS wall_posts (
@@ -392,6 +395,21 @@ CREATE TABLE IF NOT EXISTS public_enquiries (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS public_enquiries_kind_created_idx ON public_enquiries(kind, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS venue_enquiries (
+  id TEXT PRIMARY KEY,
+  venue_id TEXT NOT NULL,
+  venue_name TEXT NOT NULL,
+  visitor_name TEXT NOT NULL,
+  visitor_email TEXT NOT NULL,
+  visitor_phone TEXT NOT NULL DEFAULT '',
+  member_id TEXT REFERENCES members(id) ON DELETE SET NULL,
+  consented_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  destination_url TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS venue_enquiries_venue_created_idx ON venue_enquiries (venue_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS venue_enquiries_email_idx ON venue_enquiries (lower(visitor_email), created_at DESC);
 ALTER TABLE events ADD COLUMN IF NOT EXISTS scheduled_publish_at TIMESTAMPTZ;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE events ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();

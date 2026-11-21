@@ -32,6 +32,7 @@ import { sendMemberPasswordResetEmail, sendNewsletterCampaignEmail } from "./new
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
+const adminNotificationEmail = String(process.env.RSVP_ADMIN_NOTIFICATION_EMAIL || "info@rsvpdxb.com").trim();
 const cloudFrontOriginSecret = String(process.env.CLOUDFRONT_ORIGIN_SECRET || "");
 if (cloudFrontOriginSecret) {
   app.use((req, res, next) => {
@@ -1395,7 +1396,7 @@ app.post("/api/newsletter/campaigns", async (req, res, next) => {
     if (req.body.testOnly === true) {
       const siteUrl = String(process.env.NEWSLETTER_PUBLIC_SITE_URL || "https://www.rsvpdxb.com").replace(/\/$/, "");
       await sendNewsletterCampaignEmail({
-        email: req.admin.email,
+        email: adminNotificationEmail,
         subject: `[TEST] ${subject}`,
         body,
         imageUrl,
@@ -1406,7 +1407,7 @@ app.post("/api/newsletter/campaigns", async (req, res, next) => {
         eventVenue: event?.venue || "",
         unsubscribeUrl: `${siteUrl}/unsubscribe`,
       });
-      return res.json({ testSent: true, recipient: req.admin.email });
+      return res.json({ testSent: true, recipient: adminNotificationEmail });
     }
     const recipients = await sql`
       SELECT s.email, s.unsubscribe_token AS "unsubscribeToken"
@@ -2099,6 +2100,8 @@ app.get("/api/event-rsvp-requests", async (req, res, next) => {
         COALESCE(m.mobile, '') AS phone, COALESCE(m.outlet, '') AS publication,
         r.guest_names AS "guestNames", r.deliverables_agreed AS "deliverablesAgreed",
         r.referral_code AS "referralCode",
+        r.task_status AS "taskStatus", r.task_submission AS "taskSubmission",
+        r.task_submitted_at AS "taskSubmittedAt", e.influencer_deliverables AS deliverables,
         r.status, r.created_at AS "createdAt", r.reviewed_at AS "reviewedAt",
         r.reviewed_by AS "reviewedBy"
       FROM event_rsvp_requests r
@@ -2129,6 +2132,38 @@ app.get("/api/event-ticket-inquiries", async (req, res, next) => {
     `;
     res.json(rows);
   } catch (error) { next(error); }
+});
+
+app.get("/api/venues/enquiry-counts", async (req, res, next) => {
+  try {
+    if (!(await currentAdmin(req))) return res.status(401).json({ error: "Sign in to view venue enquiries." });
+    if (!sql) return res.json([]);
+    const counts = await sql`SELECT venue_id AS "venueId", COUNT(*)::int AS count FROM venue_enquiries GROUP BY venue_id`;
+    res.json(counts);
+  } catch (error) {
+    if (String(error?.message || "").toLowerCase().includes("venue_enquiries") && String(error?.message || "").toLowerCase().includes("does not exist")) return res.json([]);
+    next(error);
+  }
+});
+
+app.get("/api/venues/:venueId/enquiries", async (req, res, next) => {
+  try {
+    if (!(await currentAdmin(req))) return res.status(401).json({ error: "Sign in to view venue enquiries." });
+    if (!sql) return res.json([]);
+    const venueId = text(req.params.venueId, 180);
+    if (!venueId) return res.status(400).json({ error: "Choose a venue to view its enquiries." });
+    const rows = await sql`
+      SELECT id, venue_id AS "venueId", venue_name AS "venueName",
+        visitor_name AS name, visitor_email AS email, visitor_phone AS phone,
+        (member_id IS NOT NULL) AS "isMember", created_at AS "createdAt"
+      FROM venue_enquiries WHERE venue_id = ${venueId}
+      ORDER BY created_at DESC LIMIT 2000
+    `;
+    res.json(rows);
+  } catch (error) {
+    if (String(error?.message || "").toLowerCase().includes("venue_enquiries") && String(error?.message || "").toLowerCase().includes("does not exist")) return res.json([]);
+    next(error);
+  }
 });
 
 app.get("/api/enquiries", async (req, res, next) => {
@@ -2296,6 +2331,11 @@ app.patch("/api/event-rsvp-requests/:id", async (req, res, next) => {
       return res.json({ request, delivery: { status: "skipped", message: "Email is unavailable in demo mode." } });
     }
 
+    const taskGate = await sql`SELECT deliverables_agreed AS "deliverablesAgreed", task_status AS "taskStatus" FROM event_rsvp_requests WHERE id = ${req.params.id} LIMIT 1`;
+    if (!taskGate[0]) return res.status(404).json({ error: "RSVP request not found." });
+    if (taskGate[0].deliverablesAgreed && taskGate[0].taskStatus !== "submitted")
+      return res.status(409).json({ error: "The creator must submit their agreed deliverables before this RSVP can be decided." });
+
     const entryCode = `RSVP-${randomBytes(5).toString("hex").toUpperCase()}`;
     const rows = await sql`
       WITH target AS (
@@ -2331,7 +2371,8 @@ app.patch("/api/event-rsvp-requests/:id", async (req, res, next) => {
         RETURNING e.id
       ), changed AS (
         UPDATE event_rsvp_requests r
-        SET status = ${status}, reviewed_at = NOW(), reviewed_by = ${req.admin.email}, updated_at = NOW()
+        SET status = ${status}, reviewed_at = NOW(), reviewed_by = ${req.admin.email},
+          task_token_hash = NULL, updated_at = NOW()
         FROM target t, adjusted_event a
         WHERE r.id = t.id AND a.id = t.event_id
         RETURNING r.id, r.event_id AS "eventId", r.member_id AS "memberId",

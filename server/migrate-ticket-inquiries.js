@@ -8,7 +8,7 @@ if (!databaseUrl || /USER:PASSWORD|@HOST\/DBNAME/i.test(databaseUrl)) {
 }
 
 const sql = neon(databaseUrl);
-for (const file of ['001_event_ticket_inquiries.sql', '002_creator_pass_requests.sql', '003_event_date_optional.sql', '004_creator_pass_applicant_details.sql', '005_google_form_event_interest.sql', '006_creator_pass_google_forms.sql', '007_venue_image_gallery.sql', '008_event_video_gallery.sql', '009_event_rsvp_referral_codes.sql', '010_scheduled_event_publishing.sql', '011_remove_seeded_demo_records.sql', '012_public_enquiries_content.sql', '013_google_form_response_idempotency.sql']) {
+for (const file of ['001_event_ticket_inquiries.sql', '002_creator_pass_requests.sql', '003_event_date_optional.sql', '004_creator_pass_applicant_details.sql', '005_google_form_event_interest.sql', '006_creator_pass_google_forms.sql', '007_venue_image_gallery.sql', '008_event_video_gallery.sql', '009_event_rsvp_referral_codes.sql', '010_scheduled_event_publishing.sql', '011_remove_seeded_demo_records.sql', '012_public_enquiries_content.sql', '013_google_form_response_idempotency.sql', '014_venue_enquiries.sql']) {
   const migrationUrl = new URL(`./migrations/${file}`, import.meta.url);
   const migration = await readFile(migrationUrl, 'utf8');
   for (const statement of migration.split(';').map((part) => part.trim()).filter(Boolean)) {

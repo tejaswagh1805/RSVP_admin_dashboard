@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { ArrowUpRight, Check, Eye, EyeOff, ImagePlus, MapPin, Pencil, Plus, Sparkles, Star, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowUpRight, Check, Download, Eye, EyeOff, ImagePlus, MapPin, Pencil, Plus, Sparkles, Star, X } from 'lucide-react';
 import { api } from '../api.js';
 import { EmptyState, PageIntro } from '../components/UI.jsx';
+import { downloadExcel } from '../lib/downloadExcel.js';
 
 export const VENUE_CATEGORIES = ['Our partners', 'Desi luxe', 'Dinner to party', 'Bars & night culture', 'Coffee', 'Daytime & alcohol-free'];
 const blankVenue = () => ({ category: VENUE_CATEGORIES[0], name: '', tagline: '', description: '', location: '', highlights: '', offer: '', featuredDate: '', websiteUrl: '', moreInfoUrl: '', displayOrder: 0, contentReviewed: false, featured: false, galleryImages: [] });
@@ -15,6 +16,26 @@ export default function Venues({ rows = [], act }) {
   const [galleryPreviews, setGalleryPreviews] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [enquiryCounts, setEnquiryCounts] = useState({});
+  const [enquiryVenue, setEnquiryVenue] = useState(null);
+  const [venueEnquiries, setVenueEnquiries] = useState([]);
+  const [loadingEnquiries, setLoadingEnquiries] = useState(false);
+  const [enquiryError, setEnquiryError] = useState('');
+  useEffect(() => { api.venueEnquiryCounts().then((counts) => setEnquiryCounts(Object.fromEntries(counts.map((item) => [item.venueId, item.count])))).catch(() => {}); }, []);
+  const openEnquiries = async (venue) => {
+    setEnquiryVenue(venue); setVenueEnquiries([]); setEnquiryError(''); setLoadingEnquiries(true);
+    try {
+      const enquiries = await api.venueEnquiries(venue.id);
+      setVenueEnquiries(enquiries);
+      setEnquiryCounts((current) => ({ ...current, [venue.id]: enquiries.length }));
+    }
+    catch (cause) { setEnquiryError(cause.message || 'Could not load venue enquiries.'); }
+    finally { setLoadingEnquiries(false); }
+  };
+  const exportVenueEnquiries = () => {
+    if (!enquiryVenue || !venueEnquiries.length) return;
+    downloadExcel(`rsvp-dxb-${enquiryVenue.id}-venue-enquiries.xlsx`, ['Venue', 'Name', 'Email', 'Phone', 'Visitor type', 'Clicked at'], venueEnquiries.map((item) => [item.venueName, item.name, item.email, item.phone, item.isMember ? 'Member' : 'Guest', new Date(item.createdAt).toLocaleString()]), 'Venue enquiries');
+  };
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const clearForm = () => {
     if (preview) URL.revokeObjectURL(preview);
@@ -115,8 +136,9 @@ export default function Venues({ rows = [], act }) {
       <div className="venue-admin-card-content"><div className="venue-admin-card-title"><div><h3>{venue.name}</h3><p><MapPin size={13} />{venue.location}</p></div><span className="venue-admin-order">{String(venue.displayOrder || 0).padStart(2, '0')}</span></div>
         {venue.tagline ? <p className="venue-admin-tagline">{venue.tagline}</p> : null}
         <div className="venue-admin-flags"><span className={venue.contentReviewed ? 'review-ok' : 'review-needed'}>{venue.contentReviewed ? 'Content reviewed' : 'Review pending'}</span>{venue.featured ? <span className="featured-flag"><Star size={12} fill="currentColor" /> Homepage pick</span> : null}</div>
-        <div className="venue-admin-actions"><button className="small-action" onClick={() => startEdit(venue)}><Pencil size={13} /> Edit</button><button className="small-action" disabled={!venue.contentReviewed || !venue.active} onClick={() => act(() => api.setVenueFeatured(venue.id, !venue.featured), venue.featured ? 'Removed from homepage Top Picks' : 'Added to homepage Top Picks')}><Star size={13} />{venue.featured ? 'Unfeature' : 'Feature'}</button><button className="small-action" disabled={!venue.contentReviewed && !venue.active} onClick={() => act(() => api.setVenueActive(venue.id, !venue.active), venue.active ? 'Venue hidden from customer pages' : 'Venue published')} >{venue.active ? <><EyeOff size={13} /> Hide</> : <><Eye size={13} /> Publish</>}</button>{venue.websiteUrl || venue.moreInfoUrl ? <a className="small-action" href={venue.websiteUrl || venue.moreInfoUrl} target="_blank" rel="noreferrer">Preview link <ArrowUpRight size={13} /></a> : null}</div>
+        <div className="venue-admin-actions"><button className="small-action" onClick={() => openEnquiries(venue)}><Eye size={13} /> Enquiries ({enquiryCounts[venue.id] || 0})</button><button className="small-action" onClick={() => startEdit(venue)}><Pencil size={13} /> Edit</button><button className="small-action" disabled={!venue.contentReviewed || !venue.active} onClick={() => act(() => api.setVenueFeatured(venue.id, !venue.featured), venue.featured ? 'Removed from homepage Top Picks' : 'Added to homepage Top Picks')}><Star size={13} />{venue.featured ? 'Unfeature' : 'Feature'}</button><button className="small-action" disabled={!venue.contentReviewed && !venue.active} onClick={() => act(() => api.setVenueActive(venue.id, !venue.active), venue.active ? 'Venue hidden from customer pages' : 'Venue published')} >{venue.active ? <><EyeOff size={13} /> Hide</> : <><Eye size={13} /> Publish</>}</button>{venue.websiteUrl || venue.moreInfoUrl ? <a className="small-action" href={venue.websiteUrl || venue.moreInfoUrl} target="_blank" rel="noreferrer">Preview link <ArrowUpRight size={13} /></a> : null}</div>
       </div>
     </article>)}</div>}
+    {enquiryVenue ? <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEnquiryVenue(null); }}><section className="modal-card guest-modal" role="dialog" aria-modal="true" aria-labelledby="venue-enquiries-title"><div className="modal-header"><div><div className="eyebrow">VENUE REFERRALS · {venueEnquiries.length} TOTAL</div><h2 id="venue-enquiries-title">{enquiryVenue.name}</h2><p>Visitors who submitted their details before continuing to the venue website.</p></div><div className="table-actions"><button className="small-action" disabled={!venueEnquiries.length} onClick={exportVenueEnquiries}><Download size={14} /> Export Excel</button><button className="icon-button" onClick={() => setEnquiryVenue(null)} aria-label="Close enquiries"><X size={18} /></button></div></div>{enquiryError ? <p className="price-error" role="alert">{enquiryError}</p> : null}{loadingEnquiries ? <div className="loading-state"><span className="spinner" /> Loading venue enquiries…</div> : <div className="panel table-panel table-scroll"><table><thead><tr><th>VISITOR</th><th>EMAIL</th><th>PHONE</th><th>TYPE</th><th>CONTINUED TO VENUE</th></tr></thead><tbody>{venueEnquiries.map((item) => <tr key={item.id}><td><strong>{item.name}</strong><span className="table-subline">{new Date(item.createdAt).toLocaleString()}</span></td><td>{item.email}</td><td>{item.phone || '—'}</td><td>{item.isMember ? 'Member' : 'Guest'}</td><td>Yes</td></tr>)}</tbody></table>{!venueEnquiries.length && !enquiryError ? <EmptyState title="No enquiries yet" detail="Submitted venue referrals will appear here." /> : null}</div>}<div className="modal-footer"><span className="muted-text">Each row is a saved referral click. It does not confirm a completed booking.</span><button className="button button-secondary" onClick={() => setEnquiryVenue(null)}>Done</button></div></section></div> : null}
   </>;
 }
