@@ -39,24 +39,40 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     setError('');
-    try {
-      // Keep older deployed API instances usable while the people-profiles
-      // route is being rolled out. The new page can show an empty state until
-      // the matching server version is deployed.
-      const peopleProfilesRequest = api.list('people-profiles').catch((err) => {
-        if (err.status === 404) return [];
-        throw err;
-      });
-      const venuesRequest = api.list('venues').catch((err) => {
-        if (err.status === 404) return [];
-        throw err;
-      });
-      const [dashboard, applications, members, fetchedEvents, siteMedia, peopleProfiles, venues, clients, guests] = await Promise.all([
-        api.dashboard(), api.list('applications'), api.list('members'), api.list('events'), api.list('site-media'), peopleProfilesRequest, venuesRequest, api.list('clients'), api.list('door/guests'),
-      ]);
-      setData({ dashboard, applications, members, events: fetchedEvents, siteMedia, peopleProfiles, venues, clients, guests });
-    } catch (err) { if (err.status === 401) { setAdmin(null); setAuthError(err.message); } else setError(err.message); }
-    finally { setLoading(false); }
+    // Keep older deployed API instances usable while these routes roll out.
+    const peopleProfilesRequest = api.list('people-profiles').catch((err) => {
+      if (err.status === 404) return [];
+      throw err;
+    });
+    const venuesRequest = api.list('venues').catch((err) => {
+      if (err.status === 404) return [];
+      throw err;
+    });
+    const requests = [
+      ['dashboard', api.dashboard(), 'dashboard'],
+      ['applications', api.list('applications'), 'applications'],
+      ['members', api.list('members'), 'members'],
+      ['events', api.list('events'), 'events'],
+      ['site media', api.list('site-media'), 'siteMedia'],
+      ['people profiles', peopleProfilesRequest, 'peopleProfiles'],
+      ['venues', venuesRequest, 'venues'],
+      ['clients', api.list('clients'), 'clients'],
+      ['guest list', api.list('door/guests'), 'guests'],
+    ];
+    const results = await Promise.allSettled(requests.map(([, request]) => request));
+    const updates = {};
+    const failures = [];
+    results.forEach((result, index) => {
+      const [key, , dataKey] = requests[index];
+      if (result.status === 'fulfilled') updates[dataKey] = result.value;
+      else if (result.reason?.status === 401) {
+        setAdmin(null);
+        setAuthError(result.reason.message);
+      } else failures.push(key);
+    });
+    if (Object.keys(updates).length) setData((previous) => ({ ...previous, ...updates }));
+    if (failures.length) setError(`${failures.join(', ')} could not be refreshed. Showing the last loaded data where available.`);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
