@@ -171,6 +171,8 @@ CREATE INDEX IF NOT EXISTS event_rsvp_requests_event_status_idx ON event_rsvp_re
 CREATE INDEX IF NOT EXISTS event_rsvp_requests_member_idx ON event_rsvp_requests(member_id, created_at DESC);
 ALTER TABLE event_rsvp_requests ADD COLUMN IF NOT EXISTS referral_code TEXT NOT NULL DEFAULT '';
 ALTER TABLE event_rsvp_requests ADD COLUMN IF NOT EXISTS task_status TEXT NOT NULL DEFAULT 'not_required';
+ALTER TABLE event_rsvp_requests ADD COLUMN IF NOT EXISTS task_token_hash TEXT;
+CREATE INDEX IF NOT EXISTS event_rsvp_requests_task_token_idx ON event_rsvp_requests(task_token_hash) WHERE task_token_hash IS NOT NULL;
 ALTER TABLE event_rsvp_requests ADD COLUMN IF NOT EXISTS task_submission TEXT;
 ALTER TABLE event_rsvp_requests ADD COLUMN IF NOT EXISTS task_submitted_at TIMESTAMPTZ;
 

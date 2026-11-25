@@ -106,6 +106,40 @@ export async function sendInvitationEmail({ guestName, email, event, invitationU
   }
 }
 
+export async function sendMemberRsvpRequestEmail({ name, email, event, deliverables = "", taskUrl = "", reminder = false }) {
+  if (!email) return { status: "skipped", message: "No email address is on this RSVP." };
+  const region = String(process.env.SES_REGION || process.env.AWS_REGION || "").trim();
+  const from = String(process.env.SES_FROM_EMAIL || "").trim() || "RSVP DXB <vinitahirani@rsvpdxb.com>";
+  if (!region || !from) return { status: "not_configured", message: "RSVP saved, but email delivery is not configured." };
+  const eventDetails = invitationEventDetails(event);
+  const taskText = taskUrl ? ` Your agreed creator deliverables are: ${deliverables}. Please submit your work using the secure link below.` : "";
+  const message = reminder
+    ? `Your RSVP request for ${event.title} is still being reviewed. Please submit the creator deliverables you agreed to complete.${deliverables ? ` Deliverables: ${deliverables}.` : ""}`
+    : `Thank you for your RSVP request to ${event.title}. Our team is reviewing your profile. A request does not guarantee a place; we will email you when a decision is made. Event details: ${eventDetails}.${taskText}`;
+  const subject = reminder ? `Complete your creator task · ${event.title} | RSVP DXB` : `RSVP request received · ${event.title} | RSVP DXB`;
+  const html = brandedEmail({
+    eyebrow: reminder ? "Creator task reminder" : "RSVP request received",
+    title: reminder ? "Your creator task is waiting." : "Thank you for your request.",
+    greeting: `Hello ${name || "there"},`,
+    body: message,
+    preheader: reminder ? `Complete your creator task for ${event.title}` : `Your RSVP request for ${event.title} is being reviewed`,
+    actionLabel: taskUrl ? "Complete your task" : undefined,
+    actionUrl: taskUrl || undefined,
+    footer: "Warm regards,\nThe RSVP DXB team",
+  });
+  const text = `Hello ${name || "there"},\n\n${message}${taskUrl ? `\n\nComplete your task: ${taskUrl}` : ""}\n\nWarm regards,\nThe RSVP DXB team`;
+  try {
+    const ses = new SESClient({ region });
+    await ses.send(new SendEmailCommand({
+      Source: from,
+      Destination: { ToAddresses: [email] },
+      Message: { Subject: { Charset: "UTF-8", Data: subject }, Body: { Text: { Charset: "UTF-8", Data: text }, Html: { Charset: "UTF-8", Data: html } } },
+    }));
+    return { status: "submitted", message: "Email accepted by Amazon SES; inbox delivery is not confirmed." };
+  } catch (error) {
+    return { status: "failed", message: String(error?.message || "Could not send through Amazon SES.").slice(0, 240) };
+  }
+}
 export async function sendMembershipApprovalEmail({ name, email }) {
   if (!email) return { status: "skipped", message: "No email address is on this application." };
   const region = String(process.env.SES_REGION || process.env.AWS_REGION || "").trim();

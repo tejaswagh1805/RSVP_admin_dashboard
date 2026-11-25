@@ -128,6 +128,7 @@ export const api = {
   walkIn: (guest) => request('/door/walk-ins', { method: 'POST', body: JSON.stringify(guest) }),
   guestInvitations: (eventId) => request(`/guest-invitations?eventId=${encodeURIComponent(eventId)}`),
   eventRsvpRequests: (eventId) => request(`/event-rsvp-requests?eventId=${encodeURIComponent(eventId)}`),
+  sendCreatorTaskEmail: (id) => request(`/event-rsvp-requests/${encodeURIComponent(id)}/task-email`, { method: 'POST' }),
   eventTicketInquiries: (eventId) => request(`/event-ticket-inquiries?eventId=${encodeURIComponent(eventId)}`),
   enquiries: () => request('/enquiries'),
   venueEnquiryCounts: () => request('/venues/enquiry-counts'),

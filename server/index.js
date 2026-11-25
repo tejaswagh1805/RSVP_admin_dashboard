@@ -12,6 +12,7 @@ import {
   sendMembershipApprovalEmail,
   sendMemberActivationEmail,
   sendRsvpDecisionEmail,
+  sendMemberRsvpRequestEmail,
   sendCreatorPassDecisionEmail,
   sendCreatorPassReceivedEmail,
 } from "./invitation-delivery.js";
@@ -1641,21 +1642,27 @@ app.post("/api/mobile/rsvps", async (req, res, next) => {
     if (!Array.isArray(guestNames) || guestNames.length > 2 || guestNames.some((name) => typeof name !== "string" || name.trim().length < 2 || name.trim().length > 120)) {
       return res.status(400).json({ error: "Add each guest's full name, up to two guests." });
     }
-    const rows = await sql`SELECT id, title, tracks, status, influencer_deliverables AS deliverables FROM events WHERE id = ${eventId} LIMIT 1`;
+    const rows = await sql`SELECT id, title, date::text AS date, time, venue, area, tracks, status, influencer_deliverables AS deliverables FROM events WHERE id = ${eventId} LIMIT 1`;
     const event = rows[0];
     if (!event || event.status !== "published") return res.status(400).json({ error: "This event is not accepting RSVP requests." });
-    if (!event.tracks.includes(member.track)) return res.status(403).json({ error: "This event is not open to your member track." });
+    if (event.tracks?.length && !event.tracks.includes(member.track)) return res.status(403).json({ error: "This event is not open to your member track." });
     const deliverablesAgreed = Boolean(req.body.deliverablesAgreed);
     if (member.track === "Creators" && event.deliverables.trim() && !deliverablesAgreed) {
       return res.status(400).json({ error: "Please review and agree to the creator deliverables before submitting." });
     }
     const normalizedGuests = guestNames.map((name) => name.trim());
     const referralCode = text(req.body.referralCode, 100).replace(/[^a-zA-Z0-9_-]/g, "");
+    const isCreatorTask = member.track === "Creators" && event.deliverables.trim() && deliverablesAgreed;
+    const taskToken = isCreatorTask ? randomBytes(32).toString("base64url") : "";
+    const taskTokenHash = taskToken ? createHash("sha256").update(taskToken).digest("hex") : null;
+    const taskStatus = isCreatorTask ? "awaiting_submission" : "not_required";
     const inserted = await sql`
-      INSERT INTO event_rsvp_requests (id, event_id, member_id, member_email, track, guest_names, deliverables_agreed, referral_code, status)
-      VALUES (${`rsvp-${randomBytes(16).toString("hex")}`}, ${event.id}, ${member.id}, ${member.email}, ${member.track}, ${normalizedGuests}, ${member.track === "Creators" ? deliverablesAgreed : false}, ${referralCode}, 'pending')
+      INSERT INTO event_rsvp_requests (id, event_id, member_id, member_email, track, guest_names, deliverables_agreed, referral_code, task_token_hash, task_status, task_submission, task_submitted_at, status)
+      VALUES (${`rsvp-${randomBytes(16).toString("hex")}`}, ${event.id}, ${member.id}, ${member.email}, ${member.track}, ${normalizedGuests}, ${member.track === "Creators" ? deliverablesAgreed : false}, ${referralCode}, ${taskTokenHash}, ${taskStatus}, NULL, NULL, 'pending')
       ON CONFLICT (event_id, member_id) DO UPDATE SET guest_names = EXCLUDED.guest_names,
-        deliverables_agreed = EXCLUDED.deliverables_agreed, referral_code = EXCLUDED.referral_code, status = 'pending',
+        deliverables_agreed = EXCLUDED.deliverables_agreed, referral_code = EXCLUDED.referral_code,
+        task_token_hash = EXCLUDED.task_token_hash, task_status = EXCLUDED.task_status,
+        task_submission = NULL, task_submitted_at = NULL, status = 'pending',
         reviewed_at = NULL, reviewed_by = NULL, created_at = NOW(), updated_at = NOW()
       WHERE event_rsvp_requests.status = 'declined'
       RETURNING status
@@ -1664,10 +1671,19 @@ app.post("/api/mobile/rsvps", async (req, res, next) => {
       const existing = await sql`SELECT status FROM event_rsvp_requests WHERE event_id = ${event.id} AND member_id = ${member.id} LIMIT 1`;
       return res.status(409).json({ error: existing[0] ? `You already have an RSVP request for this event (${existing[0].status}).` : "Your RSVP request could not be saved." });
     }
-    res.status(201).json({ status: inserted[0].status });
+    const siteUrl = String(process.env.PUBLIC_SITE_URL || "https://www.rsvpdxb.com").replace(/\/$/, "");
+    const taskPath = taskToken ? `/creator-task/${taskToken}` : "";
+    const taskUrl = taskPath ? `${siteUrl}/signin?redirect=${encodeURIComponent(taskPath)}` : "";
+    const email = await sendMemberRsvpRequestEmail({
+      name: member.name,
+      email: member.email,
+      event,
+      deliverables: event.deliverables || "",
+      taskUrl,
+    });
+    res.status(201).json({ status: inserted[0].status, emailSent: email.status === "submitted", emailStatus: email.status });
   } catch (error) { next(error); }
 });
-
 app.post("/api/mobile/rsvps/cancel", async (req, res, next) => {
   try {
     const member = await getMobileMember(req);
@@ -2088,6 +2104,39 @@ app.get("/api/guest-invitations", async (req, res, next) => {
   }
 });
 
+app.post("/api/event-rsvp-requests/:id/task-email", async (req, res, next) => {
+  try {
+    if (!sql) return res.status(503).json({ error: "Creator task emails require the shared database." });
+    const rows = await sql`
+      SELECT r.id, r.member_id AS "memberId", r.member_email AS email, r.track,
+        r.deliverables_agreed AS "deliverablesAgreed", r.task_status AS "taskStatus",
+        m.name, e.title, e.date::text AS date, e.time, e.venue, e.area,
+        e.influencer_deliverables AS deliverables
+      FROM event_rsvp_requests r
+      JOIN members m ON m.id = r.member_id
+      JOIN events e ON e.id = r.event_id
+      WHERE r.id = ${req.params.id} LIMIT 1
+    `;
+    const request = rows[0];
+    if (!request) return res.status(404).json({ error: "RSVP request not found." });
+    if (request.track !== "Creators" || !request.deliverablesAgreed || !request.deliverables?.trim()) {
+      return res.status(400).json({ error: "This RSVP has no agreed creator task to send." });
+    }
+    if (request.taskStatus === "submitted") return res.status(409).json({ error: "This creator task has already been submitted." });
+    const taskToken = randomBytes(32).toString("base64url");
+    const taskTokenHash = createHash("sha256").update(taskToken).digest("hex");
+    const updated = await sql`
+      UPDATE event_rsvp_requests SET task_token_hash = ${taskTokenHash}, task_status = 'awaiting_submission', updated_at = NOW()
+      WHERE id = ${request.id} AND task_status <> 'submitted' RETURNING id
+    `;
+    if (!updated[0]) return res.status(409).json({ error: "This creator task has already been submitted." });
+    const siteUrl = String(process.env.PUBLIC_SITE_URL || "https://www.rsvpdxb.com").replace(/\/$/, "");
+    const taskPath = `/creator-task/${taskToken}`;
+    const taskUrl = `${siteUrl}/signin?redirect=${encodeURIComponent(taskPath)}`;
+    const delivery = await sendMemberRsvpRequestEmail({ name: request.name, email: request.email, event: request, deliverables: request.deliverables, taskUrl, reminder: true });
+    res.json({ taskStatus: "awaiting_submission", delivery });
+  } catch (error) { next(error); }
+});
 app.get("/api/event-rsvp-requests", async (req, res, next) => {
   try {
     const eventId = text(req.query.eventId, 180);
@@ -2331,10 +2380,6 @@ app.patch("/api/event-rsvp-requests/:id", async (req, res, next) => {
       return res.json({ request, delivery: { status: "skipped", message: "Email is unavailable in demo mode." } });
     }
 
-    const taskGate = await sql`SELECT deliverables_agreed AS "deliverablesAgreed", task_status AS "taskStatus" FROM event_rsvp_requests WHERE id = ${req.params.id} LIMIT 1`;
-    if (!taskGate[0]) return res.status(404).json({ error: "RSVP request not found." });
-    if (status === "accepted" && taskGate[0].deliverablesAgreed && taskGate[0].taskStatus !== "submitted")
-      return res.status(409).json({ error: "The creator must submit their agreed deliverables before this RSVP can be accepted." });
 
     const entryCode = `RSVP-${randomBytes(5).toString("hex").toUpperCase()}`;
     const rows = await sql`
