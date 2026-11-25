@@ -2334,7 +2334,7 @@ app.patch("/api/event-rsvp-requests/:id", async (req, res, next) => {
     const taskGate = await sql`SELECT deliverables_agreed AS "deliverablesAgreed", task_status AS "taskStatus" FROM event_rsvp_requests WHERE id = ${req.params.id} LIMIT 1`;
     if (!taskGate[0]) return res.status(404).json({ error: "RSVP request not found." });
     if (status === "accepted" && taskGate[0].deliverablesAgreed && taskGate[0].taskStatus !== "submitted")
-      return res.status(409).json({ error: "The creator must submit their agreed deliverables before this RSVP can be decided." });
+      return res.status(409).json({ error: "The creator must submit their agreed deliverables before this RSVP can be accepted." });
 
     const entryCode = `RSVP-${randomBytes(5).toString("hex").toUpperCase()}`;
     const rows = await sql`
