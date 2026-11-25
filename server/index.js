@@ -1,4 +1,4 @@
-﻿import "dotenv/config";
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { neon } from "@neondatabase/serverless";
@@ -191,8 +191,8 @@ const demo = {
       email: "layla@thegulfedit.com",
       track: "Media",
       city: "Dubai",
-      detail: "Senior editor, The Gulf Edit â€” food & travel",
-      followers: "â€”",
+      detail: "Senior editor, The Gulf Edit — food & travel",
+      followers: "—",
       submitted: "2026-09-29",
       status: "pending",
     },
@@ -224,7 +224,7 @@ const demo = {
       email: "office@alsuwaidi-group.ae",
       track: "Private Circle",
       city: "Abu Dhabi",
-      detail: "Referred by member #0142 â€” assistant contact on file",
+      detail: "Referred by member #0142 — assistant contact on file",
       followers: "Private",
       submitted: "2026-09-27",
       status: "pending",
@@ -235,7 +235,7 @@ const demo = {
       email: "sofia@luxereport.co",
       track: "Creators",
       city: "Dubai",
-      detail: "Beauty creator â€” YouTube + IG",
+      detail: "Beauty creator — YouTube + IG",
       followers: "41k",
       submitted: "2026-09-26",
       status: "pending",
@@ -398,7 +398,7 @@ const demo = {
       id: "w2",
       brand: "Maison Dalia",
       type: "New Event",
-      body: "Spring Collection Launch â€” Alserkal Avenue, 4 October. Creators and fashion press only.",
+      body: "Spring Collection Launch — Alserkal Avenue, 4 October. Creators and fashion press only.",
       posted: "5h ago",
       boosted: false,
       status: "live",
@@ -426,7 +426,7 @@ const demo = {
       id: "w5",
       brand: "Gallery Seventeen",
       type: "Sponsored",
-      body: "Collectors Night at DIFC â€” a curator-led evening with the artists present.",
+      body: "Collectors Night at DIFC — a curator-led evening with the artists present.",
       posted: "Pending review",
       boosted: false,
       status: "pending",
@@ -604,7 +604,7 @@ async function sendInfobipWhatsApp(to, textMessage, events = []) {
             sections: [{ rows: events.slice(0, 10).map((event) => ({
               id: event.id,
               title: event.title.slice(0, 24),
-              description: `${event.date} Â· ${event.ticketPrice} ${event.ticketCurrency}`.slice(0, 72),
+              description: `${event.date} · ${event.ticketPrice} ${event.ticketCurrency}`.slice(0, 72),
             })) }],
           },
         },
@@ -646,7 +646,7 @@ async function sendInfobipWhatsAppPayment(to, checkoutUrl, event, guestName, amo
 
   const details = [
     `Event: ${event.title}`,
-    `Date: ${event.date}${event.time ? ` Â· ${event.time}` : ""}`,
+    `Date: ${event.date}${event.time ? ` · ${event.time}` : ""}`,
     event.venue ? `Venue: ${event.venue}` : "",
     guestName ? `Guest: ${guestName}` : "",
     `Total: ${Number(amount).toFixed(2)} ${currency}`,
@@ -664,7 +664,7 @@ async function sendInfobipWhatsAppPayment(to, checkoutUrl, event, guestName, amo
       content: {
         header: eventImage
           ? { type: "IMAGE", mediaUrl: eventImage }
-          : { type: "TEXT", text: "RSVP DXB Â· Ticket checkout" },
+          : { type: "TEXT", text: "RSVP DXB · Ticket checkout" },
         body: { text: details },
         footer: { text: "Secure checkout powered by Stripe" },
         action: { displayText: "Pay now", url: checkoutUrl },
@@ -705,7 +705,7 @@ async function createStripeCheckout({ requestId, event, amount, currency }) {
     "line_items[0][price_data][currency]": String(currency).toLowerCase(),
     "line_items[0][price_data][unit_amount]": String(cents),
     "line_items[0][price_data][product_data][name]": `RSVP DXB ticket: ${event.title}`,
-    "line_items[0][price_data][product_data][description]": `${event.date}${event.venue ? ` Â· ${event.venue}` : ""}`,
+    "line_items[0][price_data][product_data][description]": `${event.date}${event.venue ? ` · ${event.venue}` : ""}`,
   });
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
@@ -901,7 +901,7 @@ app.post("/api/whatsapp/infobip/webhook", async (req, res, next) => {
       }
       await sql`INSERT INTO ticket_requests (id, event_id, phone, guest_name, amount, currency) VALUES (${id}, ${event.id}, ${phone}, ${text(item.contact?.name, 120)}, ${amount}, ${currency}) ON CONFLICT (id) DO NOTHING`;
       const priceNote = amount > 0
-        ? ` If approved, weâ€™ll send a secure ${amount.toFixed(2)} ${currency} payment link here. Your ticket is delivered after payment.`
+        ? ` If approved, we’ll send a secure ${amount.toFixed(2)} ${currency} payment link here. Your ticket is delivered after payment.`
         : " If approved, your ticket will be sent here.";
       await sendInfobipWhatsApp(phone, `Your ticket request for ${event.title} has been received. The RSVP DXB team will review it.${priceNote}`);
     }
@@ -2307,7 +2307,7 @@ async function promoteEligibleWaitlisted(eventId, excludeRequestId) {
     await sendRsvpDecisionEmail({
       name: request.name,
       email: request.email,
-      event: { title: request.eventTitle, date: request.date, time: [request.time, request.endTime ? `until ${request.endTime}` : "", request.gatesOpenTime ? `gates open ${request.gatesOpenTime}` : ""].filter(Boolean).join(" Â· "), venue: request.venue, area: request.area },
+      event: { title: request.eventTitle, date: request.date, time: [request.time, request.endTime ? `until ${request.endTime}` : "", request.gatesOpenTime ? `gates open ${request.gatesOpenTime}` : ""].filter(Boolean).join(" · "), venue: request.venue, area: request.area },
       track: request.track,
       guestNames: request.guestNames || [],
       deliverables: request.deliverables || "",
@@ -2333,7 +2333,7 @@ app.patch("/api/event-rsvp-requests/:id", async (req, res, next) => {
 
     const taskGate = await sql`SELECT deliverables_agreed AS "deliverablesAgreed", task_status AS "taskStatus" FROM event_rsvp_requests WHERE id = ${req.params.id} LIMIT 1`;
     if (!taskGate[0]) return res.status(404).json({ error: "RSVP request not found." });
-    if (taskGate[0].deliverablesAgreed && taskGate[0].taskStatus !== "submitted")
+    if (status === "accepted" && taskGate[0].deliverablesAgreed && taskGate[0].taskStatus !== "submitted")
       return res.status(409).json({ error: "The creator must submit their agreed deliverables before this RSVP can be decided." });
 
     const entryCode = `RSVP-${randomBytes(5).toString("hex").toUpperCase()}`;
@@ -2404,7 +2404,7 @@ app.patch("/api/event-rsvp-requests/:id", async (req, res, next) => {
     const delivery = await sendRsvpDecisionEmail({
       name: request.name,
       email: request.email,
-      event: { title: request.eventTitle, date: request.date, time: [request.time, request.endTime ? `until ${request.endTime}` : "", request.gatesOpenTime ? `gates open ${request.gatesOpenTime}` : ""].filter(Boolean).join(" Â· "), venue: request.venue, area: request.area },
+      event: { title: request.eventTitle, date: request.date, time: [request.time, request.endTime ? `until ${request.endTime}` : "", request.gatesOpenTime ? `gates open ${request.gatesOpenTime}` : ""].filter(Boolean).join(" · "), venue: request.venue, area: request.area },
       track: request.track,
       guestNames: request.guestNames || [],
       deliverables: request.deliverables || "",
@@ -3189,7 +3189,7 @@ app.post("/api/door/scan", async (req, res, next) => {
       const checkedIn = await sql`UPDATE ticket_requests SET checked_in_at = NOW() WHERE upper(ticket_token) = ${code} AND status IN ('approved', 'paid') AND checked_in_at IS NULL AND (${eventId} = '' OR event_id = ${eventId}) RETURNING id, guest_name AS "guestName", checked_in_at AS "checkedInAt"`;
       if (checkedIn[0]) {
         const name = checkedIn[0].guestName || "WhatsApp guest";
-        return res.json({ tone: "green", title: `Welcome ${name.split(" ")[0]}`, detail: "Ticket validated Â· entry recorded" });
+        return res.json({ tone: "green", title: `Welcome ${name.split(" ")[0]}`, detail: "Ticket validated · entry recorded" });
       }
       const existingTicket = (await sql`SELECT guest_name AS "guestName", checked_in_at AS "checkedInAt", status FROM ticket_requests WHERE upper(ticket_token) = ${code} AND (${eventId} = '' OR event_id = ${eventId}) LIMIT 1`)[0];
       if (existingTicket?.checkedInAt) return res.json({ tone: "amber", title: "Already scanned", detail: `${existingTicket.guestName || "Guest"} has already checked in.` });
@@ -3230,7 +3230,7 @@ app.post("/api/door/scan", async (req, res, next) => {
     res.json({
       tone: "green",
       title: `Welcome ${guest.name.split(" ")[0]}`,
-      detail: `Entry for ${Number(guest.plusOnes) + 1} Â· ${guest.track} Â· +20 points`,
+      detail: `Entry for ${Number(guest.plusOnes) + 1} · ${guest.track} · +20 points`,
     });
   } catch (error) {
     next(error);
@@ -3327,6 +3327,6 @@ if (process.env.NODE_ENV === "production") {
 
 app.listen(port, "0.0.0.0", () =>
   console.log(
-    `RSVP DXB API listening on port ${port}${sql ? " Â· Neon connected" : " Â· demo data mode"}`,
+    `RSVP DXB API listening on port ${port}${sql ? " · Neon connected" : " · demo data mode"}`,
   ),
 );
