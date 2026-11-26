@@ -29,6 +29,7 @@ import { createTicketPdf } from "./ticket-pdf.js";
 import { S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { sendVenueEnquiryNotification } from "./venue-enquiry.js";
 import { sendMemberPasswordResetEmail, sendNewsletterCampaignEmail } from "./newsletter.js";
 
 const app = express();
@@ -1557,6 +1558,48 @@ app.get("/api/mobile/venues", async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
+app.post("/api/mobile/venue-enquiries", async (req, res, next) => {
+  try {
+    if (!sql) return res.status(503).json({ error: "Venue enquiries are unavailable right now." });
+    const venueId = text(req.body.venueId, 180);
+    const submittedName = text(req.body.name, 120);
+    const submittedEmail = text(req.body.email, 254).toLowerCase();
+    const submittedPhone = text(req.body.phone, 22);
+    if (!venueId) return res.status(400).json({ error: "Choose a valid venue." });
+    if (!req.body.consent) return res.status(400).json({ error: "Please agree before continuing to the venue website." });
+    if (submittedName.length < 2) return res.status(400).json({ error: "Enter your name." });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(submittedEmail)) return res.status(400).json({ error: "Enter a valid email address." });
+    if (submittedPhone && !/^\+?[\d\s().-]{8,22}$/.test(submittedPhone)) return res.status(400).json({ error: "Enter a valid phone number or leave it blank." });
+
+    const member = await getMobileMember(req);
+    const rows = await sql`
+      SELECT id, name, website_url AS "websiteUrl", more_info_url AS "moreInfoUrl"
+      FROM venues WHERE id = ${venueId} AND active = TRUE AND content_reviewed = TRUE LIMIT 1
+    `;
+    const venue = rows[0];
+    if (!venue) return res.status(404).json({ error: "This venue is no longer available." });
+    const destination = String(venue.websiteUrl || venue.moreInfoUrl || "").trim();
+    let redirectUrl;
+    try { redirectUrl = new URL(destination); } catch { return res.status(400).json({ error: "This venue does not have an enquiry website available yet." }); }
+    if (!["https:", "http:"].includes(redirectUrl.protocol)) return res.status(400).json({ error: "This venue does not have a valid enquiry website." });
+    redirectUrl.searchParams.set("utm_source", "rsvpdxb");
+    redirectUrl.searchParams.set("utm_medium", "venue_enquiry");
+    redirectUrl.searchParams.set("utm_campaign", "venue_top_picks");
+
+    const name = member?.name || submittedName;
+    const email = member?.email || submittedEmail;
+    const phone = submittedPhone || member?.mobile || "";
+    const reference = randomBytes(16).toString("hex");
+    await sql`
+      INSERT INTO venue_enquiries
+        (id, venue_id, venue_name, visitor_name, visitor_email, visitor_phone, member_id, destination_url)
+      VALUES
+        (${reference}, ${venue.id}, ${venue.name}, ${name}, ${email}, ${phone}, ${member?.id || null}, ${destination})
+    `;
+    const notification = await sendVenueEnquiryNotification({ to: adminNotificationEmail, venue: venue.name, name, email, phone, member: Boolean(member), destination, reference });
+    res.status(201).json({ saved: true, notificationSent: notification.sent, redirectUrl: redirectUrl.toString() });
+  } catch (error) { next(error); }
+});
 app.post("/api/mobile/password-reset", async (req, res, next) => {
   try {
     const email = text(req.body.email, 254).toLowerCase();
