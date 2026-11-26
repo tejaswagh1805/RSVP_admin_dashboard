@@ -270,7 +270,7 @@ function creatorPassEmailHtml({ name, event, accepted, waitlisted, entryCode, me
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head><body style="margin:0;padding:0;background:#f3e3cb;color:#2e1c10;font-family:Arial,Helvetica,sans-serif"><div style="display:none;max-height:0;overflow:hidden;opacity:0">${htmlEscape(heading)} · ${safeTitle}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f3e3cb"><tr><td align="center" style="padding:28px 14px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;border:1px solid #ddc5a3;border-radius:18px;background:#fbf3e7;overflow:hidden"><tr><td style="padding:24px 30px;background:#2e1c10"><p style="margin:0;color:#e4bc7a;font-size:12px;font-weight:bold;letter-spacing:3px;text-transform:uppercase">RSVP DXB</p><p style="margin:7px 0 0;color:#f7ead5;font-size:10px;letter-spacing:2px;text-transform:uppercase">Creator pass</p></td></tr><tr><td style="padding:30px"><p style="margin:0 0 9px;color:#9a6a32;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase">${accepted ? "You're on the list" : waitlisted ? "A place may open" : "Request update"}</p><h1 style="margin:0 0 16px;color:#2e1c10;font-family:Georgia,'Times New Roman',serif;font-size:32px;font-weight:normal;line-height:1.2">${htmlEscape(heading)}</h1><p style="margin:0 0 22px;color:#604b3a;font-size:15px;line-height:1.6">Hello ${safeName},</p>${content}<p style="margin:26px 0 0;color:#725b45;font-size:13px;line-height:1.6">Warm regards,<br><strong style="color:#2e1c10">The RSVP DXB team</strong></p></td></tr><tr><td style="padding:15px 30px;border-top:1px solid #e8d7bf;color:#947d63;font-size:11px;line-height:1.5">RSVP DXB · Dubai</td></tr></table></td></tr></table></body></html>`;
 }
 
-export async function sendCreatorPassDecisionEmail({ name, email, event, status, entryCode = "" }) {
+export async function sendCreatorPassDecisionEmail({ name, email, event, status, entryCode = "", customMessage = "" }) {
   if (!email) return { status: "skipped", message: "No email address was provided; contact the guest by phone or WhatsApp manually." };
   if (!["accepted", "waitlisted", "declined"].includes(status))
     return { status: "skipped", message: "This status does not send a creator-pass decision email." };
@@ -289,8 +289,11 @@ export async function sendCreatorPassDecisionEmail({ name, email, event, status,
     : waitlisted
       ? `Thank you for requesting a creator pass for ${event.title}. Your request is on the waitlist; the team will contact you if a place opens.`
       : `Thank you for your interest in ${event.title}. Unfortunately, we are unable to offer you a creator pass for this event.`;
-  const textMessage = accepted ? message : `${message}\n\nEvent details: ${details}`;
-  const html = creatorPassEmailHtml({ name, event, accepted, waitlisted, entryCode, message, details });
+  const textMessage = String(customMessage).trim()
+    ? String(customMessage).slice(0, 10000)
+        .replace(/\n+\s*(?:warm regards|kind regards|regards|best|with warmth|warmly|best wishes),?\s*\n+\s*(?:the\s+)?rsvp dxb team\s*$/i, "").trim()
+    : accepted ? message : `${message}\n\nEvent details: ${details}`;
+  const html = creatorPassEmailHtml({ name, event, accepted, waitlisted, entryCode, message: textMessage, details });
   try {
     const ses = new SESClient({ region });
     await ses.send(new SendEmailCommand({

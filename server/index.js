@@ -2299,6 +2299,9 @@ app.patch("/api/event-ticket-inquiries/:id", async (req, res, next) => {
     if (!["pending", "contacted", "closed", "accepted", "waitlisted", "declined"].includes(status))
       return res.status(400).json({ error: "Choose pending, contacted, or closed." });
     if (!sql) return res.status(404).json({ error: "Ticket inquiry not found." });
+    const existing = await sql`SELECT request_type AS "requestType" FROM event_ticket_inquiries WHERE id = ${req.params.id} LIMIT 1`;
+    if (!existing[0]) return res.status(404).json({ error: "Ticket inquiry not found." });
+    if (existing[0].requestType !== "creator_pass") return res.status(400).json({ error: "Only creator pass requests can receive a pass decision." });
     const entryCode = `CR-${randomBytes(5).toString("hex").toUpperCase()}`;
     const rows = await sql`
       WITH changed AS (
@@ -2334,6 +2337,7 @@ app.patch("/api/event-ticket-inquiries/:id", async (req, res, next) => {
         event: { title: request.eventTitle, date: request.date, time: request.time, venue: request.venue, area: request.area },
         status,
         entryCode: request.entryCode || "",
+        customMessage: text(req.body.message, 10000),
       })
       : { status: "skipped", message: "Ticket inquiry status saved." };
     const phoneDigits = String(request.phone || "").replace(/\D/g, "");

@@ -16,6 +16,18 @@ export default function Door({ guests, events, act }) {
   const [cameraError, setCameraError] = useState('');
   const scanRef = useRef(null);
   const scanningRef = useRef(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  useEffect(() => {
+    let active = true;
+    const sync = () => api.list("door/guests").then((items) => {
+      if (!active || !Array.isArray(items)) return;
+      window.dispatchEvent(new CustomEvent("door:refresh", { detail: items }));
+      setLastSyncedAt(new Date());
+    }).catch(() => {});
+    sync();
+    const timer = window.setInterval(sync, 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
   const preferredEvent = events.find((item) => item.id === 'marina-sunset-session') || events.find((item) => item.status === 'published');
   const event = events.find((item) => item.id === selectedEventId) || preferredEvent;
   const eventGuests = guests.filter((guest) => !event || guest.eventId === event.id);
@@ -92,7 +104,7 @@ export default function Door({ guests, events, act }) {
       <div className="door-event-icon"><ScanLine size={20} /></div>
       <div className="door-event-copy"><span className="eyebrow">ACTIVE EVENT</span><h2>{event?.title || 'Select an event'}</h2><p>{event ? `${event.venue} · ${dateLabel(event.date)} · Door staff mode` : 'Create and publish an event to start check-in.'}</p></div>
       <label className="door-event-select"><span>Event</span><select value={event?.id || ''} onChange={(e) => setSelectedEventId(e.target.value)}><option value="" disabled>Select event</option>{events.filter((item) => item.status === 'published').map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
-      <div className="door-live-state"><span className="live-pill"><i /> Door is live</span><span><Clock3 size={14} /> Synced just now</span></div>
+      <div className="door-live-state"><span className="live-pill"><i /> Door is live</span><span><Clock3 size={14} /> Synced {lastSyncedAt ? lastSyncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "when guest list is current"}</span></div>
     </div>
     <div className="door-stats"><div><span>Inside</span><strong>{checkedIn}</strong><small>guests checked in</small></div><div><span>Expected</span><strong>{expected}</strong><small>including plus-ones</small></div><div><span>Remaining</span><strong>{Math.max(expected - checkedIn, 0)}</strong><small>not yet arrived</small></div><div className="door-stat-progress"><span>Guest arrivals</span><strong>{expected ? `${Math.round(checkedIn / expected * 100)}%` : '0%'}</strong><div className="progress-track"><i style={{ width: `${expected ? Math.min(checkedIn / expected * 100, 100) : 0}%` }} /></div></div></div>
     <div className="door-grid">

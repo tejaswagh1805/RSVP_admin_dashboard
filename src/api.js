@@ -135,7 +135,7 @@ export const api = {
   venueEnquiries: (venueId) => request(`/venues/${encodeURIComponent(venueId)}/enquiries`),
   updateEnquiry: (id, status) => request(`/enquiries/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   deleteEnquiry: (id) => request(`/enquiries/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  updateEventTicketInquiry: (id, status) => request(`/event-ticket-inquiries/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  updateEventTicketInquiry: (id, status, message = '') => request(`/event-ticket-inquiries/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status, message }) }),
   decideEventRsvp: (id, status, message = '', personalLine = '') => request(`/event-rsvp-requests/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status, message, personalLine }) }),
   createGuestInvitation: (guest) => request('/guest-invitations', { method: 'POST', body: JSON.stringify(guest) }),
   checkInGuestInvitation: (id) => request(`/door/guest-invitations/${encodeURIComponent(id)}/check-in`, { method: 'POST' }),
